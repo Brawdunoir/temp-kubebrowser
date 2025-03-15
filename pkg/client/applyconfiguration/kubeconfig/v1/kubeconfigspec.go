@@ -18,22 +18,12 @@ limitations under the License.
 
 package v1
 
-import (
-	kubeconfigv1 "github.com/brawdunoir/kubebrowser/pkg/apis/kubeconfig/v1"
-)
-
 // KubeconfigSpecApplyConfiguration represents a declarative configuration of the KubeconfigSpec type for use
 // with apply.
 type KubeconfigSpecApplyConfiguration struct {
-	Name       *string `json:"name,omitempty"`
-	Kubeconfig *struct {
-		APIVersion     string
-		Kind           string
-		Clusters       []kubeconfigv1.Cluster
-		Contexts       []kubeconfigv1.Context
-		CurrentContext string
-	} `json:"kubeconfig,omitempty"`
-	Whitelist *WhitelistApplyConfiguration `json:"whitelist,omitempty"`
+	Name       *string                           `json:"name,omitempty"`
+	Kubeconfig *KubeconfigDataApplyConfiguration `json:"kubeconfig,omitempty"`
+	Whitelist  *WhitelistApplyConfiguration      `json:"whitelist,omitempty"`
 }
 
 // KubeconfigSpecApplyConfiguration constructs a declarative configuration of the KubeconfigSpec type for use with
@@ -53,14 +43,8 @@ func (b *KubeconfigSpecApplyConfiguration) WithName(value string) *KubeconfigSpe
 // WithKubeconfig sets the Kubeconfig field in the declarative configuration to the given value
 // and returns the receiver, so that objects can be built by chaining "With" function invocations.
 // If called multiple times, the Kubeconfig field is set to the value of the last call.
-func (b *KubeconfigSpecApplyConfiguration) WithKubeconfig(value struct {
-	APIVersion     string
-	Kind           string
-	Clusters       []kubeconfigv1.Cluster
-	Contexts       []kubeconfigv1.Context
-	CurrentContext string
-}) *KubeconfigSpecApplyConfiguration {
-	b.Kubeconfig = &value
+func (b *KubeconfigSpecApplyConfiguration) WithKubeconfig(value *KubeconfigDataApplyConfiguration) *KubeconfigSpecApplyConfiguration {
+	b.Kubeconfig = value
 	return b
 }
 

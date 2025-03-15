@@ -42,6 +42,8 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kubeconfigv1.DetailsApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Kubeconfig"):
 		return &kubeconfigv1.KubeconfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("KubeconfigData"):
+		return &kubeconfigv1.KubeconfigDataApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("KubeconfigSpec"):
 		return &kubeconfigv1.KubeconfigSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Whitelist"):

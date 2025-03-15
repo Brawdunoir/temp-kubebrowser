@@ -24,17 +24,20 @@ type Kubeconfig struct {
 	Spec              KubeconfigSpec `json:"spec,omitempty"`
 }
 
+// KubeconfigData defines the structure of the kubeconfig field
+type KubeconfigData struct {
+	APIVersion     string    `json:"apiVersion"`
+	Kind           string    `json:"kind"`
+	Clusters       []Cluster `json:"clusters"`
+	Contexts       []Context `json:"contexts,omitempty"`
+	CurrentContext string    `json:"current-context,omitempty"`
+}
+
 // KubeconfigSpec defines the desired state of Kubeconfig
 type KubeconfigSpec struct {
-	Name       string `json:"name"`
-	Kubeconfig struct {
-		APIVersion     string    `json:"apiVersion"`
-		Kind           string    `json:"kind"`
-		Clusters       []Cluster `json:"clusters"`
-		Contexts       []Context `json:"contexts,omitempty"`
-		CurrentContext string    `json:"current-context,omitempty"`
-	} `json:"kubeconfig"`
-	Whitelist *Whitelist `json:"whitelist,omitempty"`
+	Name       string         `json:"name"`
+	Kubeconfig KubeconfigData `json:"kubeconfig"`
+	Whitelist  *Whitelist     `json:"whitelist,omitempty"`
 }
 
 // Cluster represents a Kubernetes cluster entry
