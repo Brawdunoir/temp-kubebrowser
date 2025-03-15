@@ -16,7 +16,7 @@ type KubeconfigList struct {
 // +genclient
 // +genclient:noStatus
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
-// +kubebuilder:resource:path=kubeconfigs
+
 // Kubeconfig is the Schema for the kubeconfigs API
 type Kubeconfig struct {
 	metav1.TypeMeta   `json:",inline"`
