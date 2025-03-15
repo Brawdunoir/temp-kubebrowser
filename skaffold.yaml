@@ -1,0 +1,16 @@
+apiVersion: skaffold/v4beta12
+kind: Config
+metadata:
+  name: kubebrowser
+build:
+  artifacts:
+    - image: backend
+      context: .
+      # buildpacks:
+      #   builder: gcr.io/buildpacks/builder:v1
+      ko: {}
+  # local:
+  #   push: true
+manifests:
+  rawYaml:
+    - k8s/*yaml
