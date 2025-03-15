@@ -24,8 +24,6 @@ type Kubeconfig struct {
 	Spec              KubeconfigSpec `json:"spec,omitempty"`
 }
 
-// +k8s:deepcopy-gen=true
-
 // KubeconfigData defines the structure of the kubeconfig field
 type KubeconfigData struct {
 	APIVersion     string    `json:"apiVersion"`
