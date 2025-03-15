@@ -2,6 +2,7 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // +k8s:deepcopy-gen=true
@@ -25,6 +26,8 @@ type Kubeconfig struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              KubeconfigSpec `json:"spec,omitempty"`
 }
+
+// +k8s:deepcopy-gen=true
 
 // KubeconfigData defines the structure of the kubeconfig field
 type KubeconfigData struct {
@@ -69,8 +72,15 @@ type ContextSpec struct {
 	User    string `json:"user"`
 }
 
+// +k8s:deepcopy-gen=true
+
 // Whitelist contains allowed users/groups
 type Whitelist struct {
 	Users  []string `json:"users,omitempty"`
 	Groups []string `json:"groups,omitempty"`
+}
+
+// Resource returns the GroupResource for the Kubeconfig resource.
+func Resource(resource string) schema.GroupResource {
+    return SchemeGroupVersion.WithResource(resource).GroupResource()
 }
