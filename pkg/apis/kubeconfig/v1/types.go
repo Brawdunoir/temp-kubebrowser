@@ -4,6 +4,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +k8s:deepcopy-gen=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // KubeconfigList contains a list of Kubeconfig objects
@@ -15,6 +16,7 @@ type KubeconfigList struct {
 
 // +genclient
 // +genclient:noStatus
+// +k8s:deepcopy-gen=true
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Kubeconfig is the Schema for the kubeconfigs API
@@ -32,6 +34,8 @@ type KubeconfigData struct {
 	Contexts       []Context `json:"contexts,omitempty"`
 	CurrentContext string    `json:"current-context,omitempty"`
 }
+
+// +k8s:deepcopy-gen=true
 
 // KubeconfigSpec defines the desired state of Kubeconfig
 type KubeconfigSpec struct {
