@@ -3,6 +3,6 @@ kind: ClusterRole
 metadata:
   name: backend-clusterrole
 rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["list", "watch", "get"]
