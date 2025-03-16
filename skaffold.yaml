@@ -5,7 +5,7 @@ metadata:
 build:
   artifacts:
     - image: backend
-      context: .
+      context: server
       # buildpacks:
       #   builder: gcr.io/buildpacks/builder:v1
       ko: {}
