@@ -14,3 +14,8 @@ build:
 manifests:
   rawYaml:
     - k8s/*yaml
+portForward:
+  - resourceType: deployment
+    resourceName: backend
+    namespace: default
+    port: 8080
