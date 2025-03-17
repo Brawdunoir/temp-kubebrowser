@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"time"
 
 	"github.com/brawdunoir/kubebrowser/pkg/signals"
@@ -10,13 +12,15 @@ import (
 	"k8s.io/klog/v2"
 
 	clientset "github.com/brawdunoir/kubebrowser/pkg/client/clientset/versioned"
+	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
 
 	informers "github.com/brawdunoir/kubebrowser/pkg/client/informers/externalversions"
 )
 
 // var (
-// 	clientID     = os.Getenv("OAUTH2_CLIENT_ID")
-// 	clientSecret = os.Getenv("OAUTH2_CLIENT_SECRET")
+
+// clientID     = os.Getenv("OAUTH2_CLIENT_ID")
+// clientSecret = os.Getenv("OAUTH2_CLIENT_SECRET")
 // )
 
 // func randString(nByte int) (string, error) {
@@ -45,58 +49,54 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 	logger := klog.FromContext(ctx)
 
+	kubeconfigLister, err := setupKubeconfigLister(ctx)
+	if err != nil {
+		logger.Error(err, "Error creating kubeconfigLister")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	}
+
+	kubeconfigs, err := kubeconfigLister.Kubeconfigs("default").List(labels.NewSelector())
+	if err != nil {
+		logger.Error(err, "Error listing kubeconfigs")
+		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	}
+	for n, kubeconfig := range kubeconfigs {
+
+		logger.Info("this is kubeconfig:", "number", n, "kubeconfig", kubeconfig)
+	}
+	logger.Info("I have listed all kubeconfigs")
+	time.Sleep(time.Hour * 1)
+}
+
+// Setup the Kubernetes client and the SharedInformerFactory
+// Returns a KubeconfigLister
+func setupKubeconfigLister(ctx context.Context) (kubeconfigLister v1.KubeconfigLister, err error) {
 	// creates the in-cluster config
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
-		logger.Error(err, "Error building kubeconfig")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		return nil, err
 	}
 
 	exampleClient, err := clientset.NewForConfig(cfg)
 	if err != nil {
-		logger.Error(err, "Error building kubernetes clientset")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		return nil, err
 	}
 
 	// Create the informer factory
 	kubeInformerFactory := informers.NewSharedInformerFactory(exampleClient, time.Second*30)
 
 	// Get the lister for Kubeconfigs
-	kubeconfigLister := kubeInformerFactory.Kubeconfig().V1().Kubeconfigs().Lister()
+	kubeconfigLister = kubeInformerFactory.Kubeconfig().V1().Kubeconfigs().Lister()
 
 	// Start the informer factory
-	stopCh := make(chan struct{})
-	kubeInformerFactory.Start(stopCh)
+	kubeInformerFactory.Start(ctx.Done())
 
 	// Wait for the caches to sync
-	if !cache.WaitForCacheSync(stopCh, kubeInformerFactory.Kubeconfig().V1().Kubeconfigs().Informer().HasSynced) {
-		logger.Error(nil, "Failed to sync caches")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	if !cache.WaitForCacheSync(ctx.Done(), kubeInformerFactory.Kubeconfig().V1().Kubeconfigs().Informer().HasSynced) {
+		return nil, errors.New("failed to sync caches")
 	}
 
-	// Use the lister to get the Kubeconfig resource
-	kubeconfig, err := kubeconfigLister.Kubeconfigs("default").Get("example-kubeconfig")
-	if err != nil {
-		logger.Error(err, "Failed to get example-kubeconfig")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-
-	logger.Info("I fetched example-kubeconfig once:", "example-kubeconfig", kubeconfig)
-	// time.Sleep(time.Hour * 1)
-
-	for {
-		kubeconfigs, err := kubeconfigLister.Kubeconfigs("default").List(labels.NewSelector())
-		if err != nil {
-			logger.Error(err, "Error listing kubeconfigs")
-			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-		}
-		for n, kubeconfig := range kubeconfigs {
-
-			logger.Info("this is kubeconfig:", "number", n, "kubeconfig", kubeconfig)
-		}
-		logger.Info("I have listed all kubeconfigs")
-		time.Sleep(time.Second * 10)
-	}
+	return kubeconfigLister, nil
 }
 
 // ctx := context.Background()
