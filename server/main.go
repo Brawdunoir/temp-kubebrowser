@@ -5,19 +5,21 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/brawdunoir/kubebrowser/pkg/signals"
-	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/memstore"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/oauth2"
 	"k8s.io/klog/v2"
 )
 
-var (
-	clientID     = os.Getenv("OAUTH2_CLIENT_ID")
-	clientSecret = os.Getenv("OAUTH2_CLIENT_SECRET")
+type contextKey string
+
+const (
+	loggerKey     contextKey = "logger"
+	callbackRoute string     = "/auth/callback"
+	sessionSecret string     = "secret"
 )
 
 func main() {
@@ -27,27 +29,26 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 	logger := klog.FromContext(ctx)
 
-	// kubeconfigLister, err := setupKubeconfigLister(ctx)
-	// if err != nil {
-	// 	logger.Error(err, "Error creating kubeconfigLister")
-	// 	klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	// }
+	// Add logger to context
+	ctx = context.WithValue(ctx, loggerKey, logger)
 
 	config, verifier, err := setupOidc(ctx, clientID, clientSecret)
 	if err != nil {
 		logger.Error(err, "Failed to setup Oidc")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
+	store := memstore.NewStore([]byte(sessionSecret))
 
 	router := gin.Default()
 
+	router.Use(sessions.Sessions("kubebrowser_session", store))
 	router.Use(AuthMiddleware(verifier, config))
 
 	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "Welcome to the authenticated app!")
+		c.String(http.StatusOK, "ok")
 	})
-
-	router.GET("/auth/callback", handleOAuth2Callback(ctx, config, verifier))
+	router.GET(callbackRoute, handleOAuth2Callback(config, verifier))
+	router.GET("/api/kubeconfigs")
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -56,47 +57,23 @@ func main() {
 			return ctx
 		},
 	}
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("listen: %s\n", err)
-	}
-}
 
-func AuthMiddleware(verifier *oidc.IDTokenVerifier, config oauth2.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		idTokenCookie, err := c.Cookie("id_token")
-		if err != nil || idTokenCookie == "" {
-			redirectToOIDCLogin(c, config)
-			return
+	// Run the server in a goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err)
 		}
+	}()
 
-		idToken, err := verifier.Verify(c.Request.Context(), idTokenCookie)
-		if err != nil || idToken.Expiry.Before(time.Now()) {
-			// Attempt to refresh the token
-			refreshTokenCookie, err := c.Cookie("refresh_token")
-			if err != nil || refreshTokenCookie == "" {
-				redirectToOIDCLogin(c, config)
-				return
-			}
+	// Wait for the shutdown signal
+	<-ctx.Done()
 
-			newToken, err := refreshToken(c.Request.Context(), config, refreshTokenCookie)
-			if err != nil {
-				redirectToOIDCLogin(c, config)
-				return
-			}
-
-			// Update cookies with the new tokens
-			setCallbackCookie(c, "id_token", newToken.Extra("id_token").(string))
-			setCallbackCookie(c, "refresh_token", newToken.RefreshToken)
-
-			// Verify the new ID token
-			_, err = verifier.Verify(c.Request.Context(), newToken.Extra("id_token").(string))
-			if err != nil {
-				redirectToOIDCLogin(c, config)
-				return
-			}
-		}
-
-		// Token is valid, proceed with the request
-		c.Next()
+	// Gracefully shut down the server
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error(err, "Server forced to shutdown")
 	}
+
+	logger.Info("Server exiting")
 }
