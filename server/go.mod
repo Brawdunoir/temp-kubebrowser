@@ -3,6 +3,7 @@ module github.com/brawdunoir/kubebrowser
 go 1.24.1
 
 require (
+	github.com/gin-contrib/sessions v1.0.2
 	golang.org/x/oauth2 v0.28.0
 	k8s.io/apimachinery v0.32.3
 )
@@ -15,7 +16,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
-	github.com/gin-contrib/sessions v1.0.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
