@@ -2,12 +2,8 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -16,15 +12,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/oauth2"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
-
-	clientset "github.com/brawdunoir/kubebrowser/pkg/client/clientset/versioned"
-	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
-
-	informers "github.com/brawdunoir/kubebrowser/pkg/client/informers/externalversions"
 )
 
 var (
@@ -39,161 +27,76 @@ func main() {
 	ctx := signals.SetupSignalHandler()
 	logger := klog.FromContext(ctx)
 
-	kubeconfigLister, err := setupKubeconfigLister(ctx)
+	// kubeconfigLister, err := setupKubeconfigLister(ctx)
+	// if err != nil {
+	// 	logger.Error(err, "Error creating kubeconfigLister")
+	// 	klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+	// }
+
+	config, verifier, err := setupOidc(ctx, clientID, clientSecret)
 	if err != nil {
-		logger.Error(err, "Error creating kubeconfigLister")
+		logger.Error(err, "Failed to setup Oidc")
 		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 	}
 
-	kubeconfigs, err := kubeconfigLister.Kubeconfigs("default").List(labels.NewSelector())
-	if err != nil {
-		logger.Error(err, "Error listing kubeconfigs")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-	}
-	for n, kubeconfig := range kubeconfigs {
+	router := gin.Default()
 
-		logger.Info("this is kubeconfig:", "number", n, "kubeconfig", kubeconfig)
-	}
-	logger.Info("I have listed all kubeconfigs")
+	router.Use(AuthMiddleware(verifier, config))
 
-	provider, err := oidc.NewProvider(ctx, "https://login.microsoftonline.com/a3594a5e-d561-4f1b-a566-9a93202ecf1d/v2.0")
-	if err != nil {
-		logger.Error(err, "Unable to create OIDC provider")
-	}
-	oidcConfig := &oidc.Config{
-		ClientID: clientID,
-	}
-	verifier := provider.Verifier(oidcConfig)
-
-	config := oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Endpoint:     provider.Endpoint(),
-		RedirectURL:  "http://localhost:8080/auth/callback",
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess},
-	}
-
-	r := gin.Default()
-
-	r.GET("/", func(c *gin.Context) {
-		state, err := randString(16)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Internal error")
-			return
-		}
-		nonce, err := randString(16)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Internal error")
-			return
-		}
-		setCallbackCookie(c, "state", state)
-		setCallbackCookie(c, "nonce", nonce)
-
-		c.Redirect(http.StatusFound, config.AuthCodeURL(state, oidc.Nonce(nonce)))
+	router.GET("/", func(c *gin.Context) {
+		c.String(http.StatusOK, "Welcome to the authenticated app!")
 	})
 
-	r.GET("/auth/callback", func(c *gin.Context) {
-		state, err := c.Cookie("state")
-		if err != nil {
-			c.String(http.StatusBadRequest, "state not found")
-			return
-		}
-		if c.Query("state") != state {
-			c.String(http.StatusBadRequest, "state did not match")
-			return
-		}
+	router.GET("/auth/callback", handleOAuth2Callback(ctx, config, verifier))
 
-		oauth2Token, err := config.Exchange(ctx, c.Query("code"))
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Failed to exchange token: "+err.Error())
-			return
-		}
-		rawIDToken, ok := oauth2Token.Extra("id_token").(string)
-		if !ok {
-			c.String(http.StatusInternalServerError, "No id_token field in oauth2 token.")
-			return
-		}
-		idToken, err := verifier.Verify(ctx, rawIDToken)
-		if err != nil {
-			c.String(http.StatusInternalServerError, "Failed to verify ID Token: "+err.Error())
-			return
-		}
-
-		nonce, err := c.Cookie("nonce")
-		if err != nil {
-			c.String(http.StatusBadRequest, "nonce not found")
-			return
-		}
-		if idToken.Nonce != nonce {
-			c.String(http.StatusBadRequest, "nonce did not match")
-			return
-		}
-
-		oauth2Token.AccessToken = "*REDACTED*"
-
-		resp := struct {
-			RefreshToken string
-			IDToken      string
-		}{oauth2Token.RefreshToken, rawIDToken}
-
-		data, err := json.Marshal(resp)
-		if err != nil {
-			c.String(http.StatusInternalServerError, err.Error())
-			return
-		}
-		c.Data(http.StatusOK, "application/json", data)
-	})
-
-	log.Fatal(r.Run())
-
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: router,
+		BaseContext: func(net.Listener) context.Context {
+			return ctx
+		},
+	}
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("listen: %s\n", err)
+	}
 }
 
-// Setup the Kubernetes client and the SharedInformerFactory
-// Returns a KubeconfigLister
-func setupKubeconfigLister(ctx context.Context) (kubeconfigLister v1.KubeconfigLister, err error) {
-	// creates the in-cluster config
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
+func AuthMiddleware(verifier *oidc.IDTokenVerifier, config oauth2.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		idTokenCookie, err := c.Cookie("id_token")
+		if err != nil || idTokenCookie == "" {
+			redirectToOIDCLogin(c, config)
+			return
+		}
+
+		idToken, err := verifier.Verify(c.Request.Context(), idTokenCookie)
+		if err != nil || idToken.Expiry.Before(time.Now()) {
+			// Attempt to refresh the token
+			refreshTokenCookie, err := c.Cookie("refresh_token")
+			if err != nil || refreshTokenCookie == "" {
+				redirectToOIDCLogin(c, config)
+				return
+			}
+
+			newToken, err := refreshToken(c.Request.Context(), config, refreshTokenCookie)
+			if err != nil {
+				redirectToOIDCLogin(c, config)
+				return
+			}
+
+			// Update cookies with the new tokens
+			setCallbackCookie(c, "id_token", newToken.Extra("id_token").(string))
+			setCallbackCookie(c, "refresh_token", newToken.RefreshToken)
+
+			// Verify the new ID token
+			_, err = verifier.Verify(c.Request.Context(), newToken.Extra("id_token").(string))
+			if err != nil {
+				redirectToOIDCLogin(c, config)
+				return
+			}
+		}
+
+		// Token is valid, proceed with the request
+		c.Next()
 	}
-
-	exampleClient, err := clientset.NewForConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create the informer factory
-	kubeInformerFactory := informers.NewSharedInformerFactory(exampleClient, time.Second*30)
-
-	// Get the lister for Kubeconfigs
-	kubeconfigLister = kubeInformerFactory.Kubeconfig().V1().Kubeconfigs().Lister()
-
-	// Start the informer factory
-	kubeInformerFactory.Start(ctx.Done())
-
-	// Wait for the caches to sync
-	if !cache.WaitForCacheSync(ctx.Done(), kubeInformerFactory.Kubeconfig().V1().Kubeconfigs().Informer().HasSynced) {
-		return nil, errors.New("failed to sync caches")
-	}
-
-	return kubeconfigLister, nil
-}
-
-func randString(nByte int) (string, error) {
-	b := make([]byte, nByte)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-func setCallbackCookie(c *gin.Context, name, value string) {
-	cookie := &http.Cookie{
-		Name:     name,
-		Value:    value,
-		MaxAge:   int(time.Hour.Seconds()),
-		Secure:   c.Request.TLS != nil,
-		HttpOnly: true,
-	}
-	http.SetCookie(c.Writer, cookie)
 }
