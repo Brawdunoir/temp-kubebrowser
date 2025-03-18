@@ -16,6 +16,17 @@ manifests:
     - k8s/*yaml
 portForward:
   - resourceType: deployment
-    resourceName: backend
+    resourceName: kubebrowser-server
     namespace: default
     port: 8080
+deploy:
+  helm:
+    releases:
+      - name: kubebrowser
+        chartPath: chart
+        setValueTemplates:
+          server.image.registry: "{{.IMAGE_DOMAIN_backend}}"
+          server.image.repository: "{{.IMAGE_REPO_NO_DOMAIN_backend}}"
+          server.image.tag: "{{.IMAGE_TAG_backend}}@{{.IMAGE_DIGEST_backend}}"
+          server.configuration.clientID: "{{.OAUTH2_CLIENT_ID}}"
+          server.configuration.clientSecret: "{{.OAUTH2_CLIENT_SECRET}}"
