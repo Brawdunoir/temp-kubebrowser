@@ -5,10 +5,16 @@ metadata:
 build:
   artifacts:
     - image: backend
-      context: server
-      # buildpacks:
-      #   builder: gcr.io/buildpacks/builder:v1
-      ko: {}
+      context: .
+      hooks:
+        before:
+          - command: ["sh", "-c", "./hook.sh"]
+            os: [darwin, linux]
+      ko:
+        dependencies:
+          paths:
+            - .
+        dir: server
   # local:
   #   push: true
 manifests:
