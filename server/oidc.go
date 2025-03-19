@@ -17,6 +17,7 @@ import (
 var (
 	clientID     = os.Getenv("OAUTH2_CLIENT_ID")
 	clientSecret = os.Getenv("OAUTH2_CLIENT_SECRET")
+	issuerURL    = os.Getenv("OAUTH2_ISSUER_URL")
 )
 
 const (
@@ -36,11 +37,11 @@ func setCallbackCookie(c *gin.Context, name, value string) {
 		c.Request.TLS != nil,                  // Secure (set to false for local development)
 		true,                                  // HttpOnly
 	)
-	logger.Debugw("Cookie is set", "name", name)
+	logger.Debugw("Callback cookie is set", "name", name)
 }
 
 func setupOidc(ctx context.Context, clientID string, clientSecret string) (oauth2.Config, *oidc.IDTokenVerifier, error) {
-	provider, err := oidc.NewProvider(ctx, "https://login.microsoftonline.com/a3594a5e-d561-4f1b-a566-9a93202ecf1d/v2.0")
+	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
 		return oauth2.Config{}, nil, err
 	}

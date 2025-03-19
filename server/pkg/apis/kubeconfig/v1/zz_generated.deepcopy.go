@@ -65,6 +65,11 @@ func (in *KubeconfigData) DeepCopyInto(out *KubeconfigData) {
 		*out = make([]Context, len(*in))
 		copy(*out, *in)
 	}
+	if in.Users != nil {
+		in, out := &in.Users, &out.Users
+		*out = make([]User, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

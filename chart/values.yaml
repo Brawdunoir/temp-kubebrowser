@@ -87,7 +87,7 @@ server:
   ## @param server.configuration.clientSecret Client secret of your application
   ## @param server.configuration.authorizationEndpoint Authorization endpoint of your OIDC provider (e.g. https://login.microsoftonline.com/<tenant_id>/oauth2/v2.0/authorize)
   ## @param server.configuration.tokenEndpoint Token endpoint of your OIDC provider (e.g. https://login.microsoftonline.com/<tenant_id>/oauth2/v2.0/token)
-  ## @param server.configuration.issuerUrl Issuer URL of your OIDC provider (e.g. https://login.microsoftonline.com/<tenant_id>/v2.0)
+  ## @param server.configuration.issuerURL Issuer URL of your OIDC provider (e.g. https://login.microsoftonline.com/<tenant_id>/v2.0)
   ## @param server.configuration.logLevel Log level of the server
   ## @param server.configuration.mountPath Mount path of the configuration file
   ## @param server.configuration.kubeconfigsPath Path to the kubeconfigs directory
@@ -96,9 +96,9 @@ server:
     # defaultUsername: "oidc-user"
     clientID: ""
     clientSecret: ""
+    issuerURL: ""
     # authorizationEndpoint: ""
     # tokenEndpoint: ""
-    # issuerUrl: ""
     # scopes: []
     # logLevel: "INFO"
     # mountPath: "/app"

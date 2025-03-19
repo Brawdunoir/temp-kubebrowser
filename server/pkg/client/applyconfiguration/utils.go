@@ -32,6 +32,10 @@ import (
 func ForKind(kind schema.GroupVersionKind) interface{} {
 	switch kind {
 	// Group=kubeconfig, Version=v1
+	case v1.SchemeGroupVersion.WithKind("AuthProviderConfig"):
+		return &kubeconfigv1.AuthProviderConfigApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("AuthProviderSpec"):
+		return &kubeconfigv1.AuthProviderSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Cluster"):
 		return &kubeconfigv1.ClusterApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Context"):
@@ -46,6 +50,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &kubeconfigv1.KubeconfigDataApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("KubeconfigSpec"):
 		return &kubeconfigv1.KubeconfigSpecApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("User"):
+		return &kubeconfigv1.UserApplyConfiguration{}
+	case v1.SchemeGroupVersion.WithKind("UserSpec"):
+		return &kubeconfigv1.UserSpecApplyConfiguration{}
 	case v1.SchemeGroupVersion.WithKind("Whitelist"):
 		return &kubeconfigv1.WhitelistApplyConfiguration{}
 

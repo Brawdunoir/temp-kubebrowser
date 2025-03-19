@@ -36,6 +36,7 @@ type KubeconfigData struct {
 	Clusters       []Cluster `json:"clusters"`
 	Contexts       []Context `json:"contexts,omitempty"`
 	CurrentContext string    `json:"current-context,omitempty"`
+	Users          []User    `json:"users,omitempty`
 }
 
 // +k8s:deepcopy-gen=true
@@ -66,10 +67,36 @@ type Context struct {
 	Context ContextSpec `json:"context"`
 }
 
+// Context represents a user entry
+type User struct {
+	Name  string   `json:"name"`
+	Users UserSpec `json:"users"`
+}
+
 // ContextSpec defines the details of a context
 type ContextSpec struct {
 	Cluster string `json:"cluster"`
 	User    string `json:"user"`
+}
+
+// UserSpec defines the details of a user
+type UserSpec struct {
+	AuthProvider AuthProviderSpec `json:"auth-provider"`
+}
+
+// AuthProviderSpec defines the authentication provider details
+type AuthProviderSpec struct {
+	Name   string             `json:"name"`
+	Config AuthProviderConfig `json:"config"`
+}
+
+// AuthProviderConfig holds the configuration for the authentication provider
+type AuthProviderConfig struct {
+	ClientID     string `json:"client-id"`
+	ClientSecret string `json:"client-secret"`
+	IDToken      string `json:"id-token"`
+	IDPIssuerURL string `json:"idp-issuer-url"`
+	RefreshToken string `json:"refresh-token"`
 }
 
 // +k8s:deepcopy-gen=true
@@ -82,5 +109,5 @@ type Whitelist struct {
 
 // Resource returns the GroupResource for the Kubeconfig resource.
 func Resource(resource string) schema.GroupResource {
-    return SchemeGroupVersion.WithResource(resource).GroupResource()
+	return SchemeGroupVersion.WithResource(resource).GroupResource()
 }

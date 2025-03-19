@@ -10,6 +10,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 )
 
 func randString(nByte int) (string, error) {
@@ -59,4 +60,27 @@ func filterKubeconfig(c *gin.Context, kubeconfigs []*v1.Kubeconfig, idToken *oid
 	}
 
 	return filtered, nil
+}
+
+func addOIDCUsers(c *gin.Context, kubeconfigs []*v1.KubeconfigData, rawIDToken string, refreshToken string) []*v1.KubeconfigData {
+	logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
+	config := c.Request.Context().Value(oauth2ConfigKey).(oauth2.Config)
+	logger.Debug("Entering in addOIDCUsers")
+
+	logger.Debug(config)
+
+	user := v1.User{Name: "oidc", Users: v1.UserSpec{
+		AuthProvider: v1.AuthProviderSpec{Name: "oidc", Config: v1.AuthProviderConfig{
+			ClientID:     config.ClientID,
+			ClientSecret: config.ClientSecret,
+			IDPIssuerURL: issuerURL,
+			IDToken:      rawIDToken,
+			RefreshToken: refreshToken,
+		}},
+	}}
+	for _, k := range kubeconfigs {
+		k.Users = append(k.Users, user)
+	}
+
+	return kubeconfigs
 }

@@ -88,6 +88,8 @@ spec:
               value: {{ .Values.server.configuration.clientID | quote }}
             - name: OAUTH2_CLIENT_SECRET
               value: {{ .Values.server.configuration.clientSecret | quote }}
+            - name: OAUTH2_ISSUER_URL
+              value: {{ .Values.server.configuration.issuerURL | quote }}
           {{- if .Values.server.extraEnvVars }}
           {{- include "common.tplvalues.render" (dict "value" .Values.server.extraEnvVars "context" $) | nindent 12 }}
           {{- end }}

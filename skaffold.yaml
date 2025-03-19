@@ -30,3 +30,4 @@ deploy:
           server.image.tag: "{{.IMAGE_TAG_backend}}@{{.IMAGE_DIGEST_backend}}"
           server.configuration.clientID: "{{.OAUTH2_CLIENT_ID}}"
           server.configuration.clientSecret: "{{.OAUTH2_CLIENT_SECRET}}"
+          server.configuration.issuerURL: "{{.OAUTH2_ISSUER_URL}}"

@@ -15,15 +15,18 @@ import (
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
 type contextKey string
 
 const (
-	loggerKey     contextKey = "logger"
-	callbackRoute string     = "/auth/callback"
-	sessionSecret string     = "secret"
+	loggerKey         contextKey = "logger"
+	oauth2ConfigKey   contextKey = "oauth2_config"
+	oauth2VerifierKey contextKey = "oauth2_verifier"
+	callbackRoute     string     = "/auth/callback"
+	sessionSecret     string     = "secret"
 )
 
 func main() {
@@ -50,6 +53,8 @@ func main() {
 		logger.Error(err, "Failed to setup Oidc")
 		os.Exit(1)
 	}
+	ctx = context.WithValue(ctx, oauth2ConfigKey, config)
+	ctx = context.WithValue(ctx, oauth2VerifierKey, verifier)
 
 	// Create session store
 	store := memstore.NewStore([]byte(sessionSecret))
@@ -63,7 +68,7 @@ func main() {
 		c.String(http.StatusOK, "ok")
 	})
 	router.GET(callbackRoute, handleOAuth2Callback(config, verifier))
-	router.GET("/api/kubeconfigs", handleGetKubeconfigs(verifier, kubeconfigLister))
+	router.GET("/api/kubeconfigs", handleGetKubeconfigs(config, verifier, kubeconfigLister))
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -93,21 +98,21 @@ func main() {
 	logger.Warn("Server exiting")
 }
 
-func handleGetKubeconfigs(verifier *oidc.IDTokenVerifier, kl v1.KubeconfigLister) gin.HandlerFunc {
+func handleGetKubeconfigs(config oauth2.Config, verifier *oidc.IDTokenVerifier, kl v1.KubeconfigLister) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 		session := sessions.Default(c)
+		rawIDToken := session.Get(rawIDTokenKey).(string)
+		refreshToken := session.Get(refreshTokenKey).(string)
 
 		logger.Debug("Getting kubeconfigs")
-
 		kubeconfigs, err := kl.Kubeconfigs("default").List(labels.Everything())
 		if err != nil {
 			logger.Error(err, "Error listing kubeconfigs")
 			c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
 		}
 
-		rawIDToken := session.Get(rawIDTokenKey)
-		idToken, err := verifier.Verify(c.Request.Context(), rawIDToken.(string))
+		idToken, err := verifier.Verify(c.Request.Context(), rawIDToken)
 		if err != nil {
 			logger.Error(err, "Error verifying ID token")
 			c.String(http.StatusInternalServerError, "Error verifying ID token")
@@ -119,6 +124,6 @@ func handleGetKubeconfigs(verifier *oidc.IDTokenVerifier, kl v1.KubeconfigLister
 			c.String(http.StatusInternalServerError, "Error filtering kubeconfigs")
 		}
 
-		c.JSON(http.StatusOK, filteredKubeconfigs)
+		c.JSON(http.StatusOK, addOIDCUsers(c, filteredKubeconfigs, rawIDToken, refreshToken))
 	}
 }
