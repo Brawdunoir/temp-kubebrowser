@@ -20,9 +20,9 @@ var (
 )
 
 const (
-	initialRoute    contextKey = "initial_route"
-	rawIDTokenKey   string     = "id_token"
-	refreshTokenKey string     = "refresh_token"
+	initialRoute    = "initial_route"
+	rawIDTokenKey   = "id_token"
+	refreshTokenKey = "refresh_token"
 )
 
 func setCallbackCookie(c *gin.Context, name, value string) {
