@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
@@ -20,6 +21,8 @@ import (
 )
 
 type contextKey string
+
+var static = os.Getenv("KO_DATA_PATH")
 
 const (
 	loggerKey         contextKey = "logger"
@@ -64,9 +67,15 @@ func main() {
 	router.Use(ginzap.Ginzap(l, time.RFC3339, true))
 	router.Use(AuthMiddleware(verifier, config))
 
-	router.GET("/", func(c *gin.Context) {
-		c.String(http.StatusOK, "ok")
+	router.NoRoute(func(c *gin.Context) {
+		path := c.Request.RequestURI
+		if path == "/" || strings.HasSuffix(path, ".svg") || strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".css") || strings.HasSuffix(path, ".ico") || strings.HasSuffix(path, ".html") {
+			gin.WrapH(http.FileServer(gin.Dir(static, false)))(c)
+		} else {
+			c.File(static + "/index.html")
+		}
 	})
+
 	router.GET(callbackRoute, handleOAuth2Callback(config, verifier))
 	router.GET("/api/kubeconfigs", handleGetKubeconfigs(config, verifier, kubeconfigLister))
 

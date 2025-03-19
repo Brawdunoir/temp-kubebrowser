@@ -1,4 +1,3 @@
-.envrc
 # Logs
 logs
 *.log
@@ -29,3 +28,6 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+.envrc
+kodata
