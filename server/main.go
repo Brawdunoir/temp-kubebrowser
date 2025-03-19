@@ -10,13 +10,11 @@ import (
 
 	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
 	"github.com/brawdunoir/kubebrowser/pkg/signals"
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/memstore"
 	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"golang.org/x/oauth2"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -77,7 +75,7 @@ func main() {
 	})
 
 	router.GET(callbackRoute, handleOAuth2Callback(config, verifier))
-	router.GET("/api/kubeconfigs", handleGetKubeconfigs(config, verifier, kubeconfigLister))
+	router.GET("/api/kubeconfigs", handleGetKubeconfigs(kubeconfigLister))
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -107,12 +105,9 @@ func main() {
 	logger.Warn("Server exiting")
 }
 
-func handleGetKubeconfigs(config oauth2.Config, verifier *oidc.IDTokenVerifier, kl v1.KubeconfigLister) gin.HandlerFunc {
+func handleGetKubeconfigs(kl v1.KubeconfigLister) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
-		session := sessions.Default(c)
-		rawIDToken := session.Get(rawIDTokenKey).(string)
-		refreshToken := session.Get(refreshTokenKey).(string)
 
 		logger.Debug("Getting kubeconfigs")
 		kubeconfigs, err := kl.Kubeconfigs("default").List(labels.Everything())
@@ -121,18 +116,12 @@ func handleGetKubeconfigs(config oauth2.Config, verifier *oidc.IDTokenVerifier, 
 			c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
 		}
 
-		idToken, err := verifier.Verify(c.Request.Context(), rawIDToken)
+		k, err := preprareKubeconfigs(c, kubeconfigs)
 		if err != nil {
-			logger.Error(err, "Error verifying ID token")
-			c.String(http.StatusInternalServerError, "Error verifying ID token")
+			logger.Error(err, "Error preparing kubeconfigs")
+			c.String(http.StatusInternalServerError, "Error preparing kubeconfigs")
 		}
 
-		filteredKubeconfigs, err := filterKubeconfig(c, kubeconfigs, idToken)
-		if err != nil {
-			logger.Error(err, "Error filtering kubeconfigs")
-			c.String(http.StatusInternalServerError, "Error filtering kubeconfigs")
-		}
-
-		c.JSON(http.StatusOK, addOIDCUsers(c, filteredKubeconfigs, rawIDToken, refreshToken))
+		c.JSON(http.StatusOK, k)
 	}
 }
