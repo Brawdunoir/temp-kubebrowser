@@ -5,15 +5,19 @@ metadata:
 build:
   artifacts:
     - image: backend
+      # context: server
       context: .
       hooks:
         before:
           - command: ["sh", "-c", "./hook.sh"]
             os: [darwin, linux]
       ko:
+        # {}
         dependencies:
           paths:
-            - .
+            - ui
+            - server
+            - k8s
         dir: server
   # local:
   #   push: true

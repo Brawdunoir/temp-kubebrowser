@@ -1,30 +1,45 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
-import TheWelcome from './components/TheWelcome.vue'
+import axios from 'axios'
+import { ref, onMounted } from 'vue'
+import Home from './components/Home.vue'
+
+const userName = ref<string>('')
+
+onMounted(async () => {
+  const response = await axios.get<string>('http://localhost:8080/api/me')
+  userName.value = response.data
+})
 </script>
 
 <template>
-  <header>
-    <img alt="Vue logo" class="logo" src="./assets/logo.svg" width="125" height="125" />
-
-    <div class="wrapper">
-      <HelloWorld msg="You did it!" />
-    </div>
+  <header class="app-header">
+    <h1>KubeBrowser</h1>
+    <span class="username">{{ userName }}</span>
   </header>
-
-  <main>
-    <TheWelcome />
-  </main>
+  <Home/>
 </template>
 
 <style scoped>
-header {
-  line-height: 1.5;
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3rem;
+  background-color: var(--color-background-soft);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .logo {
-  display: block;
-  margin: 0 auto 2rem;
+  height: 50px;
+}
+
+.username {
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+header {
+  line-height: 1.5;
 }
 
 @media (min-width: 1024px) {

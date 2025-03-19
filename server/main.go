@@ -10,6 +10,7 @@ import (
 
 	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
 	"github.com/brawdunoir/kubebrowser/pkg/signals"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/memstore"
 	ginzap "github.com/gin-contrib/zap"
@@ -63,6 +64,9 @@ func main() {
 	router := gin.New()
 	router.Use(sessions.Sessions("kubebrowser_session", store))
 	router.Use(ginzap.Ginzap(l, time.RFC3339, true))
+	configcors := cors.DefaultConfig()
+	configcors.AllowOrigins = []string{"http://localhost:5173"}
+	router.Use(cors.New(configcors))
 	router.Use(AuthMiddleware(verifier, config))
 
 	router.NoRoute(func(c *gin.Context) {

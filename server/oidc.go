@@ -28,6 +28,7 @@ const (
 
 func setCallbackCookie(c *gin.Context, name, value string) {
 	logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
 		name,
 		value,
@@ -165,10 +166,6 @@ func AuthMiddleware(verifier *oidc.IDTokenVerifier, config oauth2.Config) gin.Ha
 		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 		session := sessions.Default(c)
 		logger.Debug("Entering in AuthMiddleware")
-
-		if c.Request.URL.Path == "/favicon.ico" {
-			c.AbortWithStatus(http.StatusNotFound)
-		}
 
 		// Skip authentication for callback route
 		if c.Request.URL.Path == callbackRoute {
