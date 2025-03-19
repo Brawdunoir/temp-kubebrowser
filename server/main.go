@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
@@ -12,9 +12,10 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/memstore"
+	ginzap "github.com/gin-contrib/zap"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/klog/v2"
 )
 
 type contextKey string
@@ -26,11 +27,12 @@ const (
 )
 
 func main() {
-	klog.InitFlags(nil)
+	l, _ := zap.NewDevelopment()
+	defer l.Sync()
+	logger := l.Sugar()
 
 	// set up signals so we handle the shutdown signal gracefully
 	ctx := signals.SetupSignalHandler()
-	logger := klog.FromContext(ctx)
 
 	// Add logger to context
 	ctx = context.WithValue(ctx, loggerKey, logger)
@@ -39,21 +41,22 @@ func main() {
 	kubeconfigLister, err := setupKubeconfigLister(ctx)
 	if err != nil {
 		logger.Error(err, "Cannot setup kubeconfig lister")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		os.Exit(1)
 	}
 
 	// Create OIDC related config and verifier
 	config, verifier, err := setupOidc(ctx, clientID, clientSecret)
 	if err != nil {
 		logger.Error(err, "Failed to setup Oidc")
-		klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+		os.Exit(1)
 	}
 
 	// Create session store
 	store := memstore.NewStore([]byte(sessionSecret))
 
-	router := gin.Default()
+	router := gin.New()
 	router.Use(sessions.Sessions("kubebrowser_session", store))
+	router.Use(ginzap.Ginzap(l, time.RFC3339, true))
 	router.Use(AuthMiddleware(verifier, config))
 
 	router.GET("/", func(c *gin.Context) {
@@ -73,7 +76,7 @@ func main() {
 	// Run the server in a goroutine
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %s\n", err)
+			logger.Fatal("listen: %s\n", err)
 		}
 	}()
 
@@ -87,29 +90,35 @@ func main() {
 		logger.Error(err, "Server forced to shutdown")
 	}
 
-	logger.Info("Server exiting")
+	logger.Warn("Server exiting")
 }
 
 func handleGetKubeconfigs(verifier *oidc.IDTokenVerifier, kl v1.KubeconfigLister) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		logger := c.Request.Context().Value(loggerKey).(klog.Logger)
+		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 		session := sessions.Default(c)
 
-		logger.Info("Getting kubeconfigs")
+		logger.Debug("Getting kubeconfigs")
 
 		kubeconfigs, err := kl.Kubeconfigs("default").List(labels.Everything())
 		if err != nil {
 			logger.Error(err, "Error listing kubeconfigs")
-			klog.FlushAndExit(klog.ExitFlushTimeout, 1)
+			c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
 		}
 
 		rawIDToken := session.Get(rawIDTokenKey)
 		idToken, err := verifier.Verify(c.Request.Context(), rawIDToken.(string))
-
-		filteredKubeconfigs := filterKubeconfig(kubeconfigs, idToken)
-
-		for _, k := range filteredKubeconfigs {
-			logger.Info("This is a kubeconfig you are allowed to see", k.Name, k.Spec.Whitelist)
+		if err != nil {
+			logger.Error(err, "Error verifying ID token")
+			c.String(http.StatusInternalServerError, "Error verifying ID token")
 		}
+
+		filteredKubeconfigs, err := filterKubeconfig(c, kubeconfigs, idToken)
+		if err != nil {
+			logger.Error(err, "Error filtering kubeconfigs")
+			c.String(http.StatusInternalServerError, "Error filtering kubeconfigs")
+		}
+
+		c.JSON(http.StatusOK, filteredKubeconfigs)
 	}
 }

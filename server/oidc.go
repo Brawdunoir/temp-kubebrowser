@@ -10,19 +10,23 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"golang.org/x/oauth2"
-	"k8s.io/klog/v2"
 )
 
 var (
-	clientID        = os.Getenv("OAUTH2_CLIENT_ID")
-	clientSecret    = os.Getenv("OAUTH2_CLIENT_SECRET")
-	rawIDTokenKey   = "id_token"
-	refreshTokenKey = "refresh_token"
+	clientID     = os.Getenv("OAUTH2_CLIENT_ID")
+	clientSecret = os.Getenv("OAUTH2_CLIENT_SECRET")
+)
+
+const (
+	initialRoute    contextKey = "initial_route"
+	rawIDTokenKey   string     = "id_token"
+	refreshTokenKey string     = "refresh_token"
 )
 
 func setCallbackCookie(c *gin.Context, name, value string) {
-	logger := c.Request.Context().Value(loggerKey).(klog.Logger)
+	logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 	c.SetCookie(
 		name,
 		value,
@@ -32,7 +36,7 @@ func setCallbackCookie(c *gin.Context, name, value string) {
 		c.Request.TLS != nil,                  // Secure (set to false for local development)
 		true,                                  // HttpOnly
 	)
-	logger.Info("Cookie is set", "cookie", name)
+	logger.Debugw("Cookie is set", "name", name)
 }
 
 func setupOidc(ctx context.Context, clientID string, clientSecret string) (oauth2.Config, *oidc.IDTokenVerifier, error) {
@@ -66,9 +70,9 @@ func refreshTokens(ctx context.Context, config oauth2.Config, refreshToken strin
 
 func redirectToOIDCLogin(c *gin.Context, config oauth2.Config) {
 
-	logger := c.Request.Context().Value(loggerKey).(klog.Logger)
+	logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 
-	logger.Info("Entering in redirectToOIDCLogin")
+	logger.Debug("Entering in redirectToOIDCLogin")
 
 	state, err := randString(16)
 	if err != nil {
@@ -91,10 +95,10 @@ func redirectToOIDCLogin(c *gin.Context, config oauth2.Config) {
 
 func handleOAuth2Callback(config oauth2.Config, verifier *oidc.IDTokenVerifier) func(*gin.Context) {
 	return func(c *gin.Context) {
-		logger := c.Request.Context().Value(loggerKey).(klog.Logger)
+		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 		session := sessions.Default(c)
 
-		logger.Info("Entering in handleOAuth2Callback")
+		logger.Debug("Entering in handleOAuth2Callback")
 
 		// Retrieve and validate state
 		state, err := c.Cookie("state")
@@ -150,20 +154,32 @@ func handleOAuth2Callback(config oauth2.Config, verifier *oidc.IDTokenVerifier) 
 			logger.Error(err, "Cannot save session")
 			c.String(http.StatusInternalServerError, "Cannot save session")
 		}
-		c.Redirect(http.StatusFound, "/")
+		redirectURI := session.Get(initialRoute)
+		c.Redirect(http.StatusFound, redirectURI.(string))
 	}
 }
 
 func AuthMiddleware(verifier *oidc.IDTokenVerifier, config oauth2.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		logger := c.Request.Context().Value(loggerKey).(klog.Logger)
+		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
 		session := sessions.Default(c)
+		logger.Debug("Entering in AuthMiddleware")
 
-		logger.Info("Entering in AuthMiddleware")
+		if c.Request.URL.Path == "/favicon.ico" {
+			c.AbortWithStatus(http.StatusNotFound)
+		}
+
 		// Skip authentication for callback route
 		if c.Request.URL.Path == callbackRoute {
-			logger.Info("Skip auth because user hitting callback route")
+			logger.Debug("Skip auth because user hitting callback route")
 			c.Next()
+		}
+
+		session.Set(initialRoute, c.Request.RequestURI)
+		err := session.Save()
+		if err != nil {
+			logger.Error(err, "Cannot save session")
+			c.String(http.StatusInternalServerError, "Cannot save session")
 		}
 
 		// Retrieve ID token from session
@@ -171,6 +187,7 @@ func AuthMiddleware(verifier *oidc.IDTokenVerifier, config oauth2.Config) gin.Ha
 		if rawIDToken == nil {
 			logger.Info("ID token missing, redirecting to login")
 			redirectToOIDCLogin(c, config)
+			c.Abort()
 			return
 		}
 
@@ -214,7 +231,7 @@ func AuthMiddleware(verifier *oidc.IDTokenVerifier, config oauth2.Config) gin.Ha
 		}
 
 		// Token is valid, proceed with the request
-		logger.Info("Token is valid, proceed with the request")
+		logger.Debug("Token is valid, proceed with the request")
 		c.Next()
 	}
 }
