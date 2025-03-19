@@ -76,6 +76,7 @@ func main() {
 
 	router.GET(callbackRoute, handleOAuth2Callback(config, verifier))
 	router.GET("/api/kubeconfigs", handleGetKubeconfigs(kubeconfigLister))
+	router.GET("/api/me", handleGetMe)
 
 	srv := &http.Server{
 		Addr:    ":8080",
@@ -112,7 +113,7 @@ func handleGetKubeconfigs(kl v1.KubeconfigLister) gin.HandlerFunc {
 		logger.Debug("Getting kubeconfigs")
 		kubeconfigs, err := kl.Kubeconfigs("default").List(labels.Everything())
 		if err != nil {
-			logger.Error(err, "Error listing kubeconfigs")
+			logger.Errorf("Error listing kubeconfigs: %s", err)
 			c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
 		}
 
@@ -124,4 +125,27 @@ func handleGetKubeconfigs(kl v1.KubeconfigLister) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, k)
 	}
+}
+
+func handleGetMe(c *gin.Context) {
+	logger, _, verifier, session := extractFromContext(c)
+
+	logger.Debug("Entering handleGetMe")
+	rawIDToken, _ := extractFromSession(session)
+
+	idToken, err := verifier.Verify(c.Request.Context(), rawIDToken)
+	if err != nil {
+		logger.Errorf("Error verifying ID Token: %s", err)
+		c.String(http.StatusInternalServerError, "Error verifying ID Token")
+	}
+	claims := struct {
+		Name string
+	}{}
+
+	if err := idToken.Claims(&claims); err != nil {
+		logger.Errorf("Error extracting claims: %s", err)
+		c.String(http.StatusInternalServerError, "Error extracting claims")
+	}
+
+	c.JSON(http.StatusOK, claims.Name)
 }

@@ -69,14 +69,10 @@ func filterKubeconfig(c *gin.Context, kubeconfigs []*v1.Kubeconfig, idToken *oid
 }
 
 func preprareKubeconfigs(c *gin.Context, kubeconfigs []*v1.Kubeconfig) ([]*v1.KubeconfigSpec, error) {
-	logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
+	logger, config, verifier, session := extractFromContext(c)
 	logger.Debug("Entering in prepareKubeconfigs")
-	session := sessions.Default(c)
 
-	config := c.Request.Context().Value(oauth2ConfigKey).(oauth2.Config)
-	verifier := c.Request.Context().Value(oauth2VerifierKey).(*oidc.IDTokenVerifier)
-	rawIDToken := session.Get(rawIDTokenKey).(string)
-	refreshToken := session.Get(refreshTokenKey).(string)
+	rawIDToken, refreshToken := extractFromSession(session)
 
 	idToken, err := verifier.Verify(c.Request.Context(), rawIDToken)
 	if err != nil {
@@ -107,4 +103,12 @@ func preprareKubeconfigs(c *gin.Context, kubeconfigs []*v1.Kubeconfig) ([]*v1.Ku
 	}
 
 	return kubeconfigsSpec, nil
+}
+
+func extractFromContext(c *gin.Context) (*zap.SugaredLogger, oauth2.Config, *oidc.IDTokenVerifier, sessions.Session) {
+	return c.Request.Context().Value(loggerKey).(*zap.SugaredLogger), c.Request.Context().Value(oauth2ConfigKey).(oauth2.Config), c.Request.Context().Value(oauth2VerifierKey).(*oidc.IDTokenVerifier), sessions.Default(c)
+}
+
+func extractFromSession(session sessions.Session) (rawIDToken string, refreshToken string) {
+	return session.Get(rawIDTokenKey).(string), session.Get(refreshTokenKey).(string)
 }
