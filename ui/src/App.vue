@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import axios from 'axios'
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import Home from './components/Home.vue'
 
-const userName = ref<string>('')
+const username = ref('')
+
+const loading = ref(true)
 
 onMounted(async () => {
-  const response = await axios.get<string>('http://localhost:8080/api/me')
-  userName.value = response.data
+  const response = await axios.get<string>('/api/me')
+  username.value = response.data
+  loading.value = false
 })
 </script>
 
 <template>
   <header class="app-header">
     <h1>KubeBrowser</h1>
-    <span class="username">{{ userName }}</span>
+    <span v-if="!loading" class="username">{{ username }}</span>
   </header>
   <Home/>
 </template>
@@ -24,8 +27,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3rem;
-  background-color: var(--color-background-soft);
+  padding: 1rem;
+  background-color: var(--color-background);
   border-bottom: 1px solid var(--color-border);
 }
 

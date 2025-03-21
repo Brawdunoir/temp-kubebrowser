@@ -22,7 +22,7 @@ const filteredKubeconfigs = computed(() => {
 })
 
 onMounted(async () => {
-  const response = await axios.get<KubeConfig[]>('http://localhost:8080/api/kubeconfigs')
+  const response = await axios.get<KubeConfig[]>('/api/kubeconfigs')
   kubeconfigs.value = response.data
   console.log(kubeconfigs.value)
 })
