@@ -1,40 +1,13 @@
 @import 'tailwindcss';
 
-/* semantic color variables for this project */
-:root {
-  --color-primary: #538ce3;
-  --color-secondary: #f3b735;
-  --color-background-header: #ffffff;
+@theme {
+  --font-display: 'Outfit', 'sans-serif';
+  --font-logo: 'Maven Pro', 'Outfit', 'sans-serif';
 
-  --color-border: #e0e0e0;
-  --color-border-hover: #bdbdbd;
-
-  --color-heading: #222222;
-  --color-text: #444444;
-
-  --color-background: rgb(198, 47, 47);
-
-  --section-gap: 120px;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  font-weight: normal;
-}
-
-body {
-  min-height: 100vh;
-  color: var(--color-text);
-  transition:
-    color 0.3s,
-    background-color 0.3s;
-  line-height: 1.6;
-  font-family: Arial, sans-serif;
-  font-size: 16px;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --color-primary: #192454;
+  --color-secondary: #192454;
+  --color-accent: #ffad0e;
+  --color-gray-800: #1c224d;
+  --color-gray-600: #4d557d;
+  --color-gray-300: #abb1c2;
 }

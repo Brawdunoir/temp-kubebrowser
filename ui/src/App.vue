@@ -2,6 +2,8 @@
 import axios from 'axios'
 import { ref, onMounted } from 'vue'
 import Home from './components/Home.vue'
+import Header from './components/Header.vue'
+import Hello from './components/Hello.vue'
 
 const username = ref('')
 
@@ -21,13 +23,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <header class="app-header">
-    <h1>KubeBrowser</h1>
-      <h1 class="text-3xl font-bold underline">
-      Hello world!
-    </h1>
-    <span v-if="!loading" class="username">{{ username }}</span>
-  </header>
+  <Header/>
+  <Hello/>
   <Home/>
 </template>
 
