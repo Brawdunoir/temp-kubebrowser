@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import axios from 'axios'
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import Home from './components/Home.vue'
 
 const username = ref('')
@@ -8,15 +8,24 @@ const username = ref('')
 const loading = ref(true)
 
 onMounted(async () => {
-  const response = await axios.get<string>('/api/me')
-  username.value = response.data
-  loading.value = false
+  if (import.meta.env.DEV) {
+    // Mock response for development
+    username.value = 'Firstname Lastname'
+    loading.value = false
+  } else {
+    const response = await axios.get<string>('/api/me')
+    username.value = response.data
+    loading.value = false
+  }
 })
 </script>
 
 <template>
   <header class="app-header">
     <h1>KubeBrowser</h1>
+      <h1 class="text-3xl font-bold underline">
+      Hello world!
+    </h1>
     <span v-if="!loading" class="username">{{ username }}</span>
   </header>
   <Home/>

@@ -22,9 +22,16 @@ const filteredKubeconfigs = computed(() => {
 })
 
 onMounted(async () => {
-  const response = await axios.get<KubeConfig[]>('/api/kubeconfigs')
-  kubeconfigs.value = response.data
-  console.log(kubeconfigs.value)
+  if (import.meta.env.DEV) {
+    // Mock response for development
+    kubeconfigs.value = [
+      { name: 'Cluster 1', kubeconfig: { apiVersion: 'v1', kind: 'Config' } },
+      { name: 'Cluster 2', kubeconfig: { apiVersion: 'v1', kind: 'Config' } }
+    ]
+  } else {
+    const response = await axios.get<KubeConfig[]>('/api/kubeconfigs')
+    kubeconfigs.value = response.data
+  }
 })
 
 function selectKubeconfig(kubeconfig: object) {
