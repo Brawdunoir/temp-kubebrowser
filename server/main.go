@@ -31,15 +31,13 @@ const (
 )
 
 func main() {
+	// Set up logger
 	l, _ := zap.NewDevelopment()
 	defer l.Sync()
 	logger := l.Sugar()
 
-	// set up signals so we handle the shutdown signal gracefully
+	// Set up signals so we handle the shutdown signal gracefully
 	ctx := signals.SetupSignalHandler()
-
-	// Add logger to context
-	ctx = context.WithValue(ctx, loggerKey, logger)
 
 	// Create controller lister for Kubeconfigs CRD
 	kubeconfigLister, err := setupKubeconfigLister(ctx)
@@ -54,6 +52,9 @@ func main() {
 		logger.Error(err, "Failed to setup Oidc")
 		os.Exit(1)
 	}
+
+	// Populate context
+	ctx = context.WithValue(ctx, loggerKey, logger)
 	ctx = context.WithValue(ctx, oauth2ConfigKey, config)
 	ctx = context.WithValue(ctx, oauth2VerifierKey, verifier)
 	ctx = context.WithValue(ctx, kubeconfigListerKey, kubeconfigLister)
@@ -63,7 +64,7 @@ func main() {
 
 	router := gin.New()
 	router.Use(sessions.Sessions("kubebrowser_session", store))
-	router.Use(ginzap.Ginzap(l, time.RFC3339, true))
+	router.Use(ginzap.Ginzap(logger.Desugar(), time.RFC3339, true))
 	router.Use(AuthMiddleware)
 
 	router.NoRoute(func(c *gin.Context) {
