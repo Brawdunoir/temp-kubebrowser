@@ -7,12 +7,21 @@ import (
 	"slices"
 
 	v1 "github.com/brawdunoir/kubebrowser/pkg/apis/kubeconfig/v1"
+	v1client "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 )
+
+type enhancedContext struct {
+	logger           *zap.SugaredLogger
+	oauth2Config     oauth2.Config
+	oauth2Verifier   *oidc.IDTokenVerifier
+	session          sessions.Session
+	kubeconfigLister v1client.KubeconfigLister
+}
 
 func randString(nByte int) (string, error) {
 	b := make([]byte, nByte)
@@ -69,12 +78,12 @@ func filterKubeconfig(c *gin.Context, kubeconfigs []*v1.Kubeconfig, idToken *oid
 }
 
 func preprareKubeconfigs(c *gin.Context, kubeconfigs []*v1.Kubeconfig) ([]*v1.KubeconfigSpec, error) {
-	logger, config, verifier, session := extractFromContext(c)
-	logger.Debug("Entering in prepareKubeconfigs")
+	ec := extractFromContext(c)
+	ec.logger.Debug("Entering in prepareKubeconfigs")
 
-	rawIDToken, refreshToken := extractFromSession(session)
+	rawIDToken, refreshToken := extractTokens(ec.session)
 
-	idToken, err := verifier.Verify(c.Request.Context(), rawIDToken)
+	idToken, err := ec.oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
 	if err != nil {
 		return nil, err
 	}
@@ -86,8 +95,8 @@ func preprareKubeconfigs(c *gin.Context, kubeconfigs []*v1.Kubeconfig) ([]*v1.Ku
 
 	user := v1.User{Name: "oidc", Users: v1.UserSpec{
 		AuthProvider: v1.AuthProviderSpec{Name: "oidc", Config: v1.AuthProviderConfig{
-			ClientID:     config.ClientID,
-			ClientSecret: config.ClientSecret,
+			ClientID:     ec.oauth2Config.ClientID,
+			ClientSecret: ec.oauth2Config.ClientSecret,
 			IDPIssuerURL: issuerURL,
 			IDToken:      rawIDToken,
 			RefreshToken: refreshToken,
@@ -105,10 +114,16 @@ func preprareKubeconfigs(c *gin.Context, kubeconfigs []*v1.Kubeconfig) ([]*v1.Ku
 	return kubeconfigsSpec, nil
 }
 
-func extractFromContext(c *gin.Context) (*zap.SugaredLogger, oauth2.Config, *oidc.IDTokenVerifier, sessions.Session) {
-	return c.Request.Context().Value(loggerKey).(*zap.SugaredLogger), c.Request.Context().Value(oauth2ConfigKey).(oauth2.Config), c.Request.Context().Value(oauth2VerifierKey).(*oidc.IDTokenVerifier), sessions.Default(c)
+func extractFromContext(c *gin.Context) enhancedContext {
+	return enhancedContext{
+		logger:           c.Request.Context().Value(loggerKey).(*zap.SugaredLogger),
+		oauth2Config:     c.Request.Context().Value(oauth2ConfigKey).(oauth2.Config),
+		oauth2Verifier:   c.Request.Context().Value(oauth2VerifierKey).(*oidc.IDTokenVerifier),
+		session:          sessions.Default(c),
+		kubeconfigLister: c.Request.Context().Value(kubeconfigListerKey).(v1client.KubeconfigLister),
+	}
 }
 
-func extractFromSession(session sessions.Session) (rawIDToken string, refreshToken string) {
+func extractTokens(session sessions.Session) (rawIDToken string, refreshToken string) {
 	return session.Get(rawIDTokenKey).(string), session.Get(refreshTokenKey).(string)
 }

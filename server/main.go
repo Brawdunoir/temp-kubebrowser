@@ -8,9 +8,7 @@ import (
 	"strings"
 	"time"
 
-	v1 "github.com/brawdunoir/kubebrowser/pkg/client/listers/kubeconfig/v1"
 	"github.com/brawdunoir/kubebrowser/pkg/signals"
-	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/memstore"
 	ginzap "github.com/gin-contrib/zap"
@@ -24,11 +22,12 @@ type contextKey string
 var static = os.Getenv("KO_DATA_PATH")
 
 const (
-	loggerKey         contextKey = "logger"
-	oauth2ConfigKey   contextKey = "oauth2_config"
-	oauth2VerifierKey contextKey = "oauth2_verifier"
-	callbackRoute     string     = "/auth/callback"
-	sessionSecret     string     = "secret"
+	loggerKey           contextKey = "logger"
+	oauth2ConfigKey     contextKey = "oauth2_config"
+	oauth2VerifierKey   contextKey = "oauth2_verifier"
+	kubeconfigListerKey contextKey = "kubeconfig_lister"
+	callbackRoute       string     = "/auth/callback"
+	sessionSecret       string     = "secret"
 )
 
 func main() {
@@ -57,6 +56,7 @@ func main() {
 	}
 	ctx = context.WithValue(ctx, oauth2ConfigKey, config)
 	ctx = context.WithValue(ctx, oauth2VerifierKey, verifier)
+	ctx = context.WithValue(ctx, kubeconfigListerKey, kubeconfigLister)
 
 	// Create session store
 	store := memstore.NewStore([]byte(sessionSecret))
@@ -64,10 +64,7 @@ func main() {
 	router := gin.New()
 	router.Use(sessions.Sessions("kubebrowser_session", store))
 	router.Use(ginzap.Ginzap(l, time.RFC3339, true))
-	configcors := cors.DefaultConfig()
-	configcors.AllowOrigins = []string{"http://localhost:5173"}
-	router.Use(cors.New(configcors))
-	router.Use(AuthMiddleware(verifier, config))
+	router.Use(AuthMiddleware)
 
 	router.NoRoute(func(c *gin.Context) {
 		path := c.Request.RequestURI
@@ -78,8 +75,8 @@ func main() {
 		}
 	})
 
-	router.GET(callbackRoute, handleOAuth2Callback(config, verifier))
-	router.GET("/api/kubeconfigs", handleGetKubeconfigs(kubeconfigLister))
+	router.GET(callbackRoute, handleOAuth2Callback)
+	router.GET("/api/kubeconfigs", handleGetKubeconfigs)
 	router.GET("/api/me", handleGetMe)
 
 	srv := &http.Server{
@@ -110,36 +107,34 @@ func main() {
 	logger.Warn("Server exiting")
 }
 
-func handleGetKubeconfigs(kl v1.KubeconfigLister) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		logger := c.Request.Context().Value(loggerKey).(*zap.SugaredLogger)
+func handleGetKubeconfigs(c *gin.Context) {
+	ec := extractFromContext(c)
 
-		logger.Debug("Getting kubeconfigs")
-		kubeconfigs, err := kl.Kubeconfigs("default").List(labels.Everything())
-		if err != nil {
-			logger.Errorf("Error listing kubeconfigs: %s", err)
-			c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
-		}
-
-		k, err := preprareKubeconfigs(c, kubeconfigs)
-		if err != nil {
-			logger.Error(err, "Error preparing kubeconfigs")
-			c.String(http.StatusInternalServerError, "Error preparing kubeconfigs")
-		}
-
-		c.JSON(http.StatusOK, k)
+	ec.logger.Debug("Getting kubeconfigs")
+	kubeconfigs, err := ec.kubeconfigLister.Kubeconfigs("default").List(labels.Everything())
+	if err != nil {
+		ec.logger.Errorf("Error listing kubeconfigs: %s", err)
+		c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
 	}
+
+	k, err := preprareKubeconfigs(c, kubeconfigs)
+	if err != nil {
+		ec.logger.Error(err, "Error preparing kubeconfigs")
+		c.String(http.StatusInternalServerError, "Error preparing kubeconfigs")
+	}
+
+	c.JSON(http.StatusOK, k)
 }
 
 func handleGetMe(c *gin.Context) {
-	logger, _, verifier, session := extractFromContext(c)
+	ec := extractFromContext(c)
 
-	logger.Debug("Entering handleGetMe")
-	rawIDToken, _ := extractFromSession(session)
+	ec.logger.Debug("Entering handleGetMe")
+	rawIDToken, _ := extractTokens(ec.session)
 
-	idToken, err := verifier.Verify(c.Request.Context(), rawIDToken)
+	idToken, err := ec.oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
 	if err != nil {
-		logger.Errorf("Error verifying ID Token: %s", err)
+		ec.logger.Errorf("Error verifying ID Token: %s", err)
 		c.String(http.StatusInternalServerError, "Error verifying ID Token")
 	}
 	claims := struct {
@@ -147,7 +142,7 @@ func handleGetMe(c *gin.Context) {
 	}{}
 
 	if err := idToken.Claims(&claims); err != nil {
-		logger.Errorf("Error extracting claims: %s", err)
+		ec.logger.Errorf("Error extracting claims: %s", err)
 		c.String(http.StatusInternalServerError, "Error extracting claims")
 	}
 

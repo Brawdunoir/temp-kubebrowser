@@ -42,14 +42,3 @@ func setupKubeconfigLister(ctx context.Context) (kubeconfigLister v1.KubeconfigL
 
 	return kubeconfigLister, nil
 }
-
-// kubeconfigs, err := kubeconfigLister.Kubeconfigs("default").List(labels.NewSelector())
-// if err != nil {
-// 	logger.Error(err, "Error listing kubeconfigs")
-// 	klog.FlushAndExit(klog.ExitFlushTimeout, 1)
-// }
-// for n, kubeconfig := range kubeconfigs {
-
-// 	logger.Info("this is kubeconfig:", "number", n, "kubeconfig", kubeconfig)
-// }
-// logger.Info("I have listed all kubeconfigs")
