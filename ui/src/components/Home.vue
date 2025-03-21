@@ -3,15 +3,11 @@ import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import YAML from 'yaml'
 import { copyToClipboard } from '../utils/clipboard'
+import type { Kubeconfig } from '../types/Kubeconfig'
+import KubeconfigCatalog from './KubeconfigCatalog.vue'
 
-interface KubeConfig {
-  name: string
-  kubeconfig: object
-}
-
-const kubeconfigs = ref<KubeConfig[]>([])
+const kubeconfigs = ref<Kubeconfig[]>([])
 const searchQuery = ref<string>('')
-const selectedKubeconfig = ref<string | null>(null)
 
 const filteredKubeconfigs = computed(() => {
   if (!searchQuery.value) return kubeconfigs.value
@@ -29,62 +25,25 @@ onMounted(async () => {
       { name: 'Cluster 2', kubeconfig: { apiVersion: 'v1', kind: 'Config' } }
     ]
   } else {
-    const response = await axios.get<KubeConfig[]>('/api/kubeconfigs')
+    const response = await axios.get<Kubeconfig[]>('/api/kubeconfigs')
     kubeconfigs.value = response.data
   }
 })
-
-function selectKubeconfig(kubeconfig: object) {
-  selectedKubeconfig.value = YAML.stringify(kubeconfig)
-}
-
-function copyYaml() {
-  if (selectedKubeconfig.value) {
-    copyToClipboard(selectedKubeconfig.value)
-  }
-}
 </script>
 
 <template>
-  <div class="home">
+  <div class="mx-8 my-4">
     <input
       v-model="searchQuery"
       type="text"
       placeholder="Search kubeconfigs..."
-      class="search-bar"
+      class=" p-3.5 rounded-md bg-gray-800 w-full border-2 border-gray-600"
     />
-    <div v-if="filteredKubeconfigs.length" class="catalog">
-      <div
-        v-for="kubeconfig in filteredKubeconfigs"
-        :key="kubeconfig.name"
-        class="catalog-item"
-        @click="selectKubeconfig(kubeconfig.kubeconfig)"
-      >
-        {{ kubeconfig.name }}
-      </div>
-    </div>
-    <p v-else class="empty-message">No kubeconfigs available.</p>
-
-    <div v-if="selectedKubeconfig" class="kubeconfig-box">
-      <pre>{{ selectedKubeconfig }}</pre>
-      <button class="copy-button" @click="copyYaml">Copy</button>
-    </div>
+    <KubeconfigCatalog :kubeconfigs="filteredKubeconfigs" />
   </div>
 </template>
 
 <style scoped>
-.home {
-  padding: 1rem;
-}
-
-.search-bar {
-  width: 100%;
-  padding: 0.5rem;
-  margin-bottom: 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-}
-
 .catalog {
   display: flex;
   flex-wrap: wrap;
