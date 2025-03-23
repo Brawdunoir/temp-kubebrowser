@@ -26,6 +26,7 @@ onMounted(async () => {
     kubeconfigs.value = [
       { name: 'Cluster 1', kubeconfig: { apiVersion: 'v1', kind: 'Config' } },
       { name: 'Cluster 2', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
+      { name: 'Another', kubeconfig: { apiVersion: 'v1', kind: 'Another' } },
     ]
   } else {
     const response = await axios.get<Kubeconfig[]>('/api/kubeconfigs')
