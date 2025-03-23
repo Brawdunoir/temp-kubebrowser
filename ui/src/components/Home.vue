@@ -5,6 +5,7 @@ import YAML from 'yaml'
 import { copyToClipboard } from '../utils/clipboard'
 import type { Kubeconfig } from '../types/Kubeconfig'
 import KubeconfigCatalog from './KubeconfigCatalog.vue'
+import Hello from './Hello.vue'
 
 const kubeconfigs = ref<Kubeconfig[]>([])
 const searchQuery = ref<string>('')
@@ -30,6 +31,7 @@ onMounted(async () => {
 </script>
 
 <template>
+  <Hello />
   <div class="my-10">
     <input
       v-model="searchQuery"
