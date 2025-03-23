@@ -12,9 +12,7 @@ const searchQuery = ref<string>('')
 const filteredKubeconfigs = computed(() => {
   if (!searchQuery.value) return kubeconfigs.value
   const query = searchQuery.value.toLowerCase()
-  return kubeconfigs.value.filter(kubeconfig =>
-    kubeconfig.name.toLowerCase().includes(query)
-  )
+  return kubeconfigs.value.filter((kubeconfig) => kubeconfig.name.toLowerCase().includes(query))
 })
 
 onMounted(async () => {
@@ -22,7 +20,7 @@ onMounted(async () => {
     // Mock response for development
     kubeconfigs.value = [
       { name: 'Cluster 1', kubeconfig: { apiVersion: 'v1', kind: 'Config' } },
-      { name: 'Cluster 2', kubeconfig: { apiVersion: 'v1', kind: 'Config' } }
+      { name: 'Cluster 2', kubeconfig: { apiVersion: 'v1', kind: 'Config' } },
     ]
   } else {
     const response = await axios.get<Kubeconfig[]>('/api/kubeconfigs')
@@ -32,12 +30,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-8 my-4">
+  <div class="my-10">
     <input
       v-model="searchQuery"
       type="text"
       placeholder="Search kubeconfigs..."
-      class=" p-3.5 rounded-md bg-gray-800 w-full border-2 border-gray-600"
+      class="p-3 rounded-md bg-gray-800 w-full border-2 border-gray-600"
     />
     <KubeconfigCatalog :kubeconfigs="filteredKubeconfigs" />
   </div>
