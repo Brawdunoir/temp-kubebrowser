@@ -5,6 +5,7 @@ import type { Kubeconfig } from '../types/Kubeconfig'
 import KubeconfigCatalog from './KubeconfigCatalog.vue'
 import KubeconfigDisplay from './KubeconfigDisplay.vue'
 import Hello from './Hello.vue'
+import SearchBox from './SearchBox.vue'
 
 const kubeconfigs = ref<Kubeconfig[]>([])
 const searchQuery = ref<string>('')
@@ -38,12 +39,7 @@ onMounted(async () => {
 <template>
   <Hello />
   <div class="my-10">
-    <input
-      v-model="searchQuery"
-      type="text"
-      placeholder="Search kubeconfigs..."
-      class="p-3 rounded-md bg-gray-800 w-full border-2 border-gray-600"
-    />
+    <SearchBox v-model="searchQuery" placeholder="Search kubeconfigs..." />
     <div class="flex space-x-8 my-8">
       <KubeconfigCatalog
         :kubeconfigs="filteredKubeconfigs"
