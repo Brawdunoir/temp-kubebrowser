@@ -20,7 +20,10 @@ function selectKubeconfig(kubeconfig: object) {
 </script>
 
 <template>
-  <div class="flex flex-col flex-none space-y-8 max-w-max min-w-min">
+  <div
+    class="flex-none gap-8 max-w-max min-w-min"
+    :class="{ 'flex flex-col': kubeconfigs.length < 3, 'grid grid-cols-2': kubeconfigs.length > 2 }"
+  >
     <button
       v-for="kubeconfig in kubeconfigs"
       :key="kubeconfig.name"
