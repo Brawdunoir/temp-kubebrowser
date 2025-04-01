@@ -62,17 +62,18 @@ onMounted(async () => {
     <BsEmojiSurpriseFill class="w-10 h-10 text-gray-600"/>
     <p class="text-gray-300">oops, it seems like you don't have acces to any clusters</p>
   </div>
-  <div v-else class="my-10">
-    <div class="flex space-x-8 my-8">
-      <div class="space-y-4">
-        <SearchBox v-model="searchQuery" placeholder="Search clusters..." />
+  <div v-else class="mx-4 flex flex-1 gap-x-4 overflow-y-hidden">
+    <div class="space-y-4 w-1/6 flex flex-col">
+      <SearchBox v-model="searchQuery" placeholder="Search clusters..." />
+      <div class="overflow-y-auto">
         <KubeconfigCatalog
-          :kubeconfigs="filteredKubeconfigs"
-          :index-selected="indexSelected"
-          @kubeconfig-selected="updateSelectedKubeconfig"
+        :kubeconfigs="filteredKubeconfigs"
+        :index-selected="indexSelected"
+        @kubeconfig-selected="updateSelectedKubeconfig"
         />
       </div>
-      <KubeconfigDisplay class="w-full" :kubeconfig="selectedKubeconfig" :catalog-length="filteredKubeconfigs.length" />
+
     </div>
+    <KubeconfigDisplay class="w-5/6" :kubeconfig="selectedKubeconfig" :catalog-length="filteredKubeconfigs.length" />
   </div>
 </template>
