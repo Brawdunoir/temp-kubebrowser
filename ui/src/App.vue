@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import HomePage from './components/HomePage.vue'
 import Header from './components/HeaderComponent.vue'
+import Footer from './components/FooterComponent.vue'
 </script>
 
 <template>
@@ -8,4 +9,5 @@ import Header from './components/HeaderComponent.vue'
   <div class="p-8">
     <HomePage />
   </div>
+  <Footer />
 </template>

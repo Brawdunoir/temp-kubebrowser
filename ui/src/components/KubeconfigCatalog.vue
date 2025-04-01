@@ -3,19 +3,17 @@ import { ref } from 'vue'
 import YAML from 'yaml'
 import type { Kubeconfig } from '../types/Kubeconfig'
 
-defineProps<{
+const props = defineProps<{
   kubeconfigs: Kubeconfig[]
+  indexSelected: number | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'kubeconfig-selected', kubeconfig: string): void
+  (e: 'kubeconfig-selected', kubeconfig: string, index: number): void
 }>()
 
-const selectedKubeconfig = ref<number | null>(null)
-
 function selectKubeconfig(kubeconfig: object, index: number) {
-  selectedKubeconfig.value = index
-  emit('kubeconfig-selected', YAML.stringify(kubeconfig))
+  emit('kubeconfig-selected', YAML.stringify(kubeconfig), index)
 }
 </script>
 
@@ -28,8 +26,8 @@ function selectKubeconfig(kubeconfig: object, index: number) {
       :key="index"
       class="text-lg py-6 px-12 rounded-md border-2 border-gray-600 cursor-pointer whitespace-nowrap"
       :class="{
-        'bg-accent text-primary-950': selectedKubeconfig === index,
-        'bg-gray-700': selectedKubeconfig !== index,
+        'bg-accent text-primary-950': props.indexSelected === index,
+        'bg-gray-700': props.indexSelected !== index,
       }"
       @click="selectKubeconfig(kubeconfig.kubeconfig, index)"
     >
