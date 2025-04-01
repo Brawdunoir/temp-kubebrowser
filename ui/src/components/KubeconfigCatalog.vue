@@ -11,10 +11,10 @@ const emit = defineEmits<{
   (e: 'kubeconfig-selected', kubeconfig: string): void
 }>()
 
-const selectedKubeconfigName = ref<string | null>(null)
+const selectedKubeconfig = ref<number | null>(null)
 
-function selectKubeconfig(kubeconfig: object, name: string) {
-  selectedKubeconfigName.value = name
+function selectKubeconfig(kubeconfig: object, index: number) {
+  selectedKubeconfig.value = index
   emit('kubeconfig-selected', YAML.stringify(kubeconfig))
 }
 </script>
@@ -24,14 +24,14 @@ function selectKubeconfig(kubeconfig: object, name: string) {
     class="flex-none flex flex-col gap-4 max-w-max min-w-min"
   >
     <button
-      v-for="kubeconfig in kubeconfigs"
-      :key="kubeconfig.name"
-      class="text-lg py-6 px-12 rounded-md border-2 border-gray-600 cursor-pointer"
+      v-for="(kubeconfig, index) in kubeconfigs"
+      :key="index"
+      class="text-lg py-6 px-12 rounded-md border-2 border-gray-600 cursor-pointer whitespace-nowrap"
       :class="{
-        'bg-accent text-primary-950': selectedKubeconfigName === kubeconfig.name,
-        'bg-gray-700': selectedKubeconfigName !== kubeconfig.name,
+        'bg-accent text-primary-950': selectedKubeconfig === index,
+        'bg-gray-700': selectedKubeconfig !== index,
       }"
-      @click="selectKubeconfig(kubeconfig.kubeconfig, kubeconfig.name)"
+      @click="selectKubeconfig(kubeconfig.kubeconfig, index)"
     >
       {{ kubeconfig.name }}
     </button>

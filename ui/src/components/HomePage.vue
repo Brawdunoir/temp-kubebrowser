@@ -44,13 +44,15 @@ onMounted(async () => {
 <template>
   <HelloComponent />
   <div class="my-10">
-    <SearchBox v-model="searchQuery" placeholder="Search clusters..." />
     <div class="flex space-x-8 my-8">
-      <KubeconfigCatalog
-        :kubeconfigs="filteredKubeconfigs"
-        @kubeconfig-selected="updateSelectedKubeconfig"
-      />
-      <KubeconfigDisplay :yaml="selectedKubeconfig" />
+      <div class="space-y-4">
+        <SearchBox v-model="searchQuery" placeholder="Search clusters..." />
+        <KubeconfigCatalog
+          :kubeconfigs="filteredKubeconfigs"
+          @kubeconfig-selected="updateSelectedKubeconfig"
+        />
+      </div>
+      <KubeconfigDisplay class="w-full" :yaml="selectedKubeconfig" />
     </div>
   </div>
 </template>

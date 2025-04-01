@@ -20,7 +20,7 @@ function updateValue(event: Event) {
 </script>
 
 <template>
-  <div class="relative flex items-center w-fulls">
+  <div class="relative flex items-center">
     <AnOutlinedSearch class="absolute left-3 text-gray-400 pointer-events-none" />
     <input
       :value="modelValue"
