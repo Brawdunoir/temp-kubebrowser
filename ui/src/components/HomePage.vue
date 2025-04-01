@@ -40,11 +40,6 @@ onMounted(async () => {
       { name: 'Cluster number 6', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
       { name: 'Cluster number 7', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
       { name: 'Another cluster', kubeconfig: { apiVersion: 'v1', kind: 'Another' } },
-      { name: 'Cluster number 4', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
-      { name: 'Cluster number 5', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
-      { name: 'Cluster number 6', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
-      { name: 'Cluster number 7', kubeconfig: { apiVersion: 'v1', kind: 'Config2' } },
-      { name: 'Another cluster', kubeconfig: { apiVersion: 'v1', kind: 'Another' } },
     ]
   } else {
     const response = await axios.get<Kubeconfig[]>('/api/kubeconfigs')
@@ -58,7 +53,7 @@ onMounted(async () => {
 
 <template>
   <HelloComponent />
-  <div v-if="emptyKubeconfigs" class="flex flex-col gap-4 items-center justify-center">
+  <div v-if="emptyKubeconfigs" class="flex flex-col flex-1 gap-4 items-center justify-center">
     <BsEmojiSurpriseFill class="w-10 h-10 text-gray-600"/>
     <p class="text-gray-300">oops, it seems like you don't have acces to any clusters</p>
   </div>

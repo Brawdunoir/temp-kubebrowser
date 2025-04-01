@@ -24,7 +24,7 @@ function selectKubeconfig(kubeconfig: object, index: number) {
     <button
       v-for="(kubeconfig, index) in kubeconfigs"
       :key="index"
-      class="text-lg py-6 px-12 rounded-md border-2 border-gray-600 cursor-pointer"
+      class="text-lg py-6 px-12 rounded-md border-2 border-gray-600 cursor-pointer break-words"
       :class="{
         'bg-accent text-primary-950': props.indexSelected === index,
         'bg-gray-700': props.indexSelected !== index,
