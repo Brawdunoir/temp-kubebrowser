@@ -6,11 +6,13 @@ import KubeconfigCatalog from './KubeconfigCatalog.vue'
 import KubeconfigDisplay from './KubeconfigDisplay.vue'
 import HelloComponent from './HelloComponent.vue'
 import SearchBox from './SearchBox.vue'
+import { BsEmojiSurpriseFill } from '@kalimahapps/vue-icons';
 
 const kubeconfigs = ref<Kubeconfig[]>([])
-const searchQuery = ref<string>('')
+const searchQuery = ref('')
 const selectedKubeconfig = ref<string | null>(null)
 const indexSelected = ref<number | null>(null)
+const emptyKubeconfigs = ref(false)
 
 const filteredKubeconfigs = computed(() => {
   if (!searchQuery.value) return kubeconfigs.value
@@ -46,6 +48,9 @@ onMounted(async () => {
     ]
   } else {
     const response = await axios.get<Kubeconfig[]>('/api/kubeconfigs')
+    if (!response.data.length) {
+      emptyKubeconfigs.value = true
+    }
     kubeconfigs.value = response.data
   }
 })
@@ -53,7 +58,11 @@ onMounted(async () => {
 
 <template>
   <HelloComponent />
-  <div class="my-10">
+  <div v-if="emptyKubeconfigs" class="flex flex-col gap-4 items-center justify-center">
+    <BsEmojiSurpriseFill class="w-10 h-10 text-gray-600"/>
+    <p class="text-gray-300">oops, it seems like you don't have acces to any clusters</p>
+  </div>
+  <div v-else class="my-10">
     <div class="flex space-x-8 my-8">
       <div class="space-y-4">
         <SearchBox v-model="searchQuery" placeholder="Search clusters..." />
