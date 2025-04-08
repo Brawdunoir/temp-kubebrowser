@@ -17,25 +17,23 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-type contextKey string
-
 var static = os.Getenv("KO_DATA_PATH")
 
+// Viper keys
 const (
-	// Viper const
-	hostnameKey      string = "hostname"
-	podNamespaceKey  string = "pod_namespace"
-	sessionSecretKey string = "session_secret"
-	devKey           string = "dev"
-	logLevelKey      string = "log_level"
-	// Context keys
-	loggerKey           contextKey = "logger"
-	oauth2ConfigKey     contextKey = "oauth2_config"
-	oauth2VerifierKey   contextKey = "oauth2_verifier"
-	kubeconfigListerKey contextKey = "kubeconfig_lister"
-	// Normal const
-	callbackRoute string = "/auth/callback"
-	defaultPort   string = "8080"
+	hostnameKey      = "hostname"
+	podNamespaceKey  = "pod_namespace"
+	sessionSecretKey = "session_secret"
+	devKey           = "dev"
+	logLevelKey      = "log_level"
+	clientIDKey      = "oauth2_client_id"
+	clientSecretKey  = "oauth2_client_secret"
+	issuerURLKey     = "oauth2_issuer_url"
+)
+
+const (
+	callbackRoute = "/auth/callback"
+	defaultPort   = "8080"
 )
 
 func init() {
@@ -48,36 +46,26 @@ func init() {
 }
 
 func main() {
-	// Set up logger
-	l, err := newLogger()
-	if err != nil {
+	if err := InitLogger(); err != nil {
 		panic(err)
 	}
-	defer l.Sync()
-	logger := l.Sugar()
+	defer logger.Sync()
 
 	// Set up signals so we handle the shutdown signal gracefully
 	ctx := signals.SetupSignalHandler()
 
 	// Create controller lister for Kubeconfigs CRD
-	kubeconfigLister, err := newKubeconfigLister(ctx)
-	if err != nil {
+	if err := kubecfg.Init(ctx); err != nil {
 		logger.Errorf("Cannot setup kubeconfig lister: %s", err)
 		os.Exit(1)
 	}
 
 	// Create OIDC related config and verifier
-	config, verifier, err := newOIDCConfig(ctx, viper.GetString(clientIDKey), viper.GetString(clientSecretKey))
+	err := InitOIDC(ctx)
 	if err != nil {
 		logger.Errorf("Failed to setup OIDC: %s", err)
 		os.Exit(1)
 	}
-
-	// Populate context
-	ctx = context.WithValue(ctx, loggerKey, logger)
-	ctx = context.WithValue(ctx, oauth2ConfigKey, config)
-	ctx = context.WithValue(ctx, oauth2VerifierKey, verifier)
-	ctx = context.WithValue(ctx, kubeconfigListerKey, kubeconfigLister)
 
 	// Create session store
 	store := memstore.NewStore([]byte(viper.GetString(sessionSecretKey)))
@@ -135,41 +123,58 @@ func main() {
 }
 
 func handleGetKubeconfigs(c *gin.Context) {
-	ec := extractFromContext(c)
+	logger.Debug("Getting kubeconfig")
 
-	ec.logger.Debug("Getting kubeconfig")
-	kubeconfigs, err := ec.kubeconfigLister.Kubeconfigs(viper.GetString(podNamespaceKey)).List(labels.Everything())
+	session := sessions.Default(c)
+	rawIDToken := session.Get(rawIDTokenKey).(string)
+	refreshToken := session.Get(refreshTokenKey).(string)
+
+	// NOTE: verification has been done in AuthMiddleware already
+	idToken, err := oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
 	if err != nil {
-		ec.logger.Errorf("Error listing kubeconfigs: %s", err)
+		logger.Error(err, "Error preparing kubeconfigs")
+		c.String(http.StatusInternalServerError, "Error preparing kubeconfigs")
+		return
+	}
+
+	var claims EmailAndGroups
+	if err := idToken.Claims(&claims); err != nil {
+		logger.Error(err, "Error preparing kubeconfigs")
+		c.String(http.StatusInternalServerError, "Error preparing kubeconfigs")
+		return
+	}
+	logger.Debugw("Extracted claims", "claims", claims)
+
+	logger.Debug("Getting list of all kube configs")
+	configs, err := kubecfg.lister.Kubeconfigs(viper.GetString(podNamespaceKey)).List(labels.Everything())
+	if err != nil {
+		logger.Errorf("Error listing kubeconfigs: %s", err)
 		c.String(http.StatusInternalServerError, "Error listing kubeconfigs")
 	}
 
-	k, err := preprareKubeconfigs(c, kubeconfigs)
-	if err != nil {
-		ec.logger.Error(err, "Error preparing kubeconfigs")
-		c.String(http.StatusInternalServerError, "Error preparing kubeconfigs")
-	}
+	filtered := filterKubeConfigs(configs, claims)
+	user := kubeConfigUser(rawIDToken, refreshToken)
+	specs := toKubeConfigSpecs(filtered, user)
 
-	c.JSON(http.StatusOK, k)
+	c.JSON(http.StatusOK, specs)
 }
 
 func handleGetMe(c *gin.Context) {
-	ec := extractFromContext(c)
+	logger.Debug("Entering handleGetMe")
 
-	ec.logger.Debug("Entering handleGetMe")
-	rawIDToken, _ := extractTokens(ec.session)
+	session := sessions.Default(c)
+	rawIDToken := session.Get(rawIDTokenKey).(string)
 
-	idToken, err := ec.oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
+	// NOTE: verification has been done in AuthMiddleware already
+	idToken, err := oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
 	if err != nil {
-		ec.logger.Errorf("Error verifying ID Token: %s", err)
+		logger.Errorf("Error verifying ID Token: %s", err)
 		c.String(http.StatusInternalServerError, "Error verifying ID Token")
 	}
-	claims := struct {
-		Name string
-	}{}
 
+	var claims NameOnly
 	if err := idToken.Claims(&claims); err != nil {
-		ec.logger.Errorf("Error extracting claims: %s", err)
+		logger.Errorf("Error extracting claims: %s", err)
 		c.String(http.StatusInternalServerError, "Error extracting claims")
 	}
 

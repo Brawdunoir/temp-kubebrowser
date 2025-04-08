@@ -7,24 +7,34 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 	"golang.org/x/oauth2"
 )
 
 const (
-	// Viper keys
-	clientIDKey     = "oauth2_client_id"
-	clientSecretKey = "oauth2_client_secret"
-	issuerURLKey    = "oauth2_issuer_url"
 	// Session keys
 	initialRouteKey = "initial_route"
 	rawIDTokenKey   = "id_token"
 	refreshTokenKey = "refresh_token"
 )
 
+var oauth2Config *oauth2.Config
+var oauth2Verifier *oidc.IDTokenVerifier
+
+// idToken Claims
+
+type NameOnly struct {
+	Name string
+}
+
+type EmailAndGroups struct {
+	Email  string
+	Groups []string
+}
+
 func setCallbackCookie(c *gin.Context, name, value string) {
-	logger := extractFromContext(c).logger
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
 		name,
@@ -38,27 +48,30 @@ func setCallbackCookie(c *gin.Context, name, value string) {
 	logger.Debugw("Callback cookie is set", "name", name)
 }
 
-func newOIDCConfig(ctx context.Context, clientID string, clientSecret string) (oauth2.Config, *oidc.IDTokenVerifier, error) {
-	provider, err := oidc.NewProvider(ctx, viper.GetString(issuerURLKey))
+func InitOIDC(ctx context.Context) error {
+	issuerURL := viper.GetString(issuerURLKey)
+	provider, err := oidc.NewProvider(ctx, issuerURL)
 	if err != nil {
-		return oauth2.Config{}, nil, err
+		return err
 	}
+	clientID := viper.GetString(clientIDKey)
+	clientSecret := viper.GetString(clientSecretKey)
 	oidcConfig := &oidc.Config{
 		ClientID: clientID,
 	}
-	verifier := provider.Verifier(oidcConfig)
+	oauth2Verifier = provider.Verifier(oidcConfig)
 
-	config := oauth2.Config{
+	oauth2Config = &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  viper.GetString(hostnameKey) + callbackRoute,
 		Scopes:       []string{oidc.ScopeOpenID, "profile", "email", oidc.ScopeOfflineAccess},
 	}
-	return config, verifier, nil
+	return nil
 }
 
-func refreshTokens(ctx context.Context, config oauth2.Config, refreshToken string) (*oauth2.Token, error) {
+func refreshTokens(ctx context.Context, config *oauth2.Config, refreshToken string) (*oauth2.Token, error) {
 	tokenSource := config.TokenSource(ctx, &oauth2.Token{RefreshToken: refreshToken})
 	newToken, err := tokenSource.Token()
 	if err != nil {
@@ -68,8 +81,7 @@ func refreshTokens(ctx context.Context, config oauth2.Config, refreshToken strin
 }
 
 func redirectToOIDCLogin(c *gin.Context) {
-	ec := extractFromContext(c)
-	ec.logger.Debug("Entering redirectToOIDCLogin")
+	logger.Debug("Entering redirectToOIDCLogin")
 
 	state, err := randString(16)
 	if err != nil {
@@ -87,31 +99,29 @@ func redirectToOIDCLogin(c *gin.Context) {
 	setCallbackCookie(c, "nonce", nonce)
 
 	// Redirect to OIDC login
-	c.Redirect(http.StatusFound, ec.oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce)))
+	c.Redirect(http.StatusFound, oauth2Config.AuthCodeURL(state, oidc.Nonce(nonce)))
 }
 
 func handleOAuth2Callback(c *gin.Context) {
-	ec := extractFromContext(c)
-
-	ec.logger.Debug("Entering handleOAuth2Callback")
+	logger.Debug("Entering handleOAuth2Callback")
 
 	// Retrieve and validate state
 	state, err := c.Cookie("state")
 	if err != nil {
-		ec.logger.Error(err, "State cookie not found")
+		logger.Errorf("State cookie not found: %s", err)
 		c.String(http.StatusBadRequest, "State not found")
 		return
 	}
 	if c.Query("state") != state {
-		ec.logger.Error(nil, "State mismatch", "expected", state, "got", c.Query("state"))
+		logger.Error("State mismatch", "expected", state, "got", c.Query("state"))
 		c.String(http.StatusBadRequest, "State did not match")
 		return
 	}
 
 	// Exchange code for token
-	oauth2Token, err := ec.oauth2Config.Exchange(c.Request.Context(), c.Query("code"))
+	oauth2Token, err := oauth2Config.Exchange(c.Request.Context(), c.Query("code"))
 	if err != nil {
-		ec.logger.Error(err, "Failed to exchange token")
+		logger.Errorf("Failed to exchange token: %s", err)
 		c.String(http.StatusInternalServerError, "Failed to exchange token: "+err.Error())
 		return
 	}
@@ -119,106 +129,112 @@ func handleOAuth2Callback(c *gin.Context) {
 	// Retrieve and validate nonce
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
-		ec.logger.Error(nil, "No id_token field in oauth2 token")
+		logger.Error("No id_token field in oauth2 token")
 		c.String(http.StatusInternalServerError, "No id_token field in oauth2 token")
 		return
 	}
-	idToken, err := ec.oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
+	idToken, err := oauth2Verifier.Verify(c.Request.Context(), rawIDToken)
 	if err != nil {
-		ec.logger.Error(err, "Failed to verify ID Token")
+		logger.Errorf("Failed to verify ID Token: %s", err)
 		c.String(http.StatusInternalServerError, "Failed to verify ID Token: "+err.Error())
 		return
 	}
 
 	nonce, err := c.Cookie("nonce")
 	if err != nil {
-		ec.logger.Error(err, "Nonce cookie not found")
+		logger.Errorf("Nonce cookie not found: %s", err)
 		c.String(http.StatusBadRequest, "Nonce not found")
 		return
 	}
 	if idToken.Nonce != nonce {
-		ec.logger.Error(nil, "Nonce mismatch", "expected", nonce, "got", idToken.Nonce)
+		logger.Error("Nonce mismatch", "expected", nonce, "got", idToken.Nonce)
 		c.String(http.StatusBadRequest, "Nonce did not match")
 		return
 	}
 
-	ec.session.Set(rawIDTokenKey, rawIDToken)
-	ec.session.Set(refreshTokenKey, oauth2Token.RefreshToken)
-	err = ec.session.Save()
+	session := sessions.Default(c)
+
+	session.Set(rawIDTokenKey, rawIDToken)
+	session.Set(refreshTokenKey, oauth2Token.RefreshToken)
+	err = session.Save()
 	if err != nil {
-		ec.logger.Error(err, "Cannot save session")
+		logger.Errorf("Cannot save session: %s", err)
 		c.String(http.StatusInternalServerError, "Cannot save session")
 	}
-	redirectURI := ec.session.Get(initialRouteKey)
+	redirectURI := session.Get(initialRouteKey)
 	c.Redirect(http.StatusFound, redirectURI.(string))
 }
 
 func AuthMiddleware(c *gin.Context) {
-	ec := extractFromContext(c)
-	ec.logger.Debug("Entering AuthMiddleware")
+	logger.Debug("Entering AuthMiddleware")
 
 	// Skip authentication for callback route
 	if c.Request.URL.Path == callbackRoute {
-		ec.logger.Debug("Skip auth because user hitting callback route")
+		logger.Debug("Skip auth because user hitting callback route")
 		c.Next()
+		return
 	}
 
-	ec.session.Set(initialRouteKey, c.Request.RequestURI)
-	err := ec.session.Save()
+	session := sessions.Default(c)
+
+	session.Set(initialRouteKey, c.Request.RequestURI)
+	err := session.Save()
 	if err != nil {
-		ec.logger.Error(err, "Cannot save session")
+		logger.Errorf("Could not save session: %s", err)
 		c.String(http.StatusInternalServerError, "Cannot save session")
+		return
 	}
 
 	// Retrieve ID token from session
-	rawIDToken := ec.session.Get(rawIDTokenKey)
+	rawIDToken := session.Get(rawIDTokenKey)
 	if rawIDToken == nil {
-		ec.logger.Debug("ID token missing, redirecting to login")
+		logger.Debug("ID token missing, redirecting to login")
 		redirectToOIDCLogin(c)
 		c.Abort()
 		return
 	}
 
 	// Verify ID token
-	idToken, err := ec.oauth2Verifier.Verify(c.Request.Context(), rawIDToken.(string))
+	idToken, err := oauth2Verifier.Verify(c.Request.Context(), rawIDToken.(string))
 	if err != nil || idToken.Expiry.Before(time.Now()) {
-		ec.logger.Info("ID token expired or invalid, attempting to refresh")
+		logger.Info("ID token expired or invalid, attempting to refresh")
 
 		// Retrieve refresh token
-		refreshToken := ec.session.Get(refreshTokenKey)
+		refreshToken := session.Get(refreshTokenKey)
 		if refreshToken == nil {
-			ec.logger.Info("Refresh token cookie missing, redirecting to login")
+			logger.Info("Refresh token cookie missing, redirecting to login")
 			redirectToOIDCLogin(c)
 			return
 		}
 
 		// Refresh tokens
-		newToken, err := refreshTokens(c.Request.Context(), ec.oauth2Config, refreshToken.(string))
+		newToken, err := refreshTokens(c.Request.Context(), oauth2Config, refreshToken.(string))
 		if err != nil {
-			ec.logger.Error(err, "Failed to refresh token, redirecting to login")
+			logger.Errorf("Failed to refresh token, redirecting to login: %s", err)
 			redirectToOIDCLogin(c)
 			return
 		}
 
 		// Verify new ID token
-		_, err = ec.oauth2Verifier.Verify(c.Request.Context(), newToken.Extra("id_token").(string))
+		_, err = oauth2Verifier.Verify(c.Request.Context(), newToken.Extra("id_token").(string))
 		if err != nil {
-			ec.logger.Error(err, "Failed to verify refreshed ID token, redirecting to login")
+			logger.Errorf("Failed to verify refreshed ID token, redirecting to login: %s", err)
 			redirectToOIDCLogin(c)
 			return
 		}
 
 		// Update session with new tokens
-		ec.session.Set(rawIDTokenKey, newToken.Extra("id_token").(string))
-		ec.session.Set(refreshTokenKey, newToken.RefreshToken)
-		err = ec.session.Save()
+		session.Set(rawIDTokenKey, newToken.Extra("id_token").(string))
+		session.Set(refreshTokenKey, newToken.RefreshToken)
+		err = session.Save()
 		if err != nil {
-			ec.logger.Error(err, "Cannot save session")
+			logger.Errorf("Cannot save session: %s", err)
 			c.String(http.StatusInternalServerError, "Cannot save session")
+			return
 		}
 	}
 
 	// Token is valid, proceed with the request
-	ec.logger.Debug("Token is valid, proceed with the request")
+	logger.Debug("Token is valid, proceed with the request")
 	c.Next()
 }
