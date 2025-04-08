@@ -1,35 +1,28 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import YAML from 'yaml'
-import type { Kubeconfig } from '../types/Kubeconfig'
+import type { Kubeconfig } from '@/types/Kubeconfig'
 
 const props = defineProps<{
   kubeconfigs: Kubeconfig[]
-  indexSelected: number | null
+  selected: Kubeconfig | null
 }>()
 
 const emit = defineEmits<{
-  (e: 'kubeconfig-selected', kubeconfig: string, index: number): void
+  (e: 'update:selected', value: Kubeconfig): void
 }>()
-
-function selectKubeconfig(kubeconfig: object, index: number) {
-  emit('kubeconfig-selected', YAML.stringify(kubeconfig), index)
-}
 </script>
 
 <template>
-  <div
-    class="flex-none flex flex-col gap-4 w-full"
-  >
+  <div class="flex flex-col flex-none w-full gap-4">
     <button
-      v-for="(kubeconfig, index) in kubeconfigs"
-      :key="index"
-      class="text-lg py-6 px-12 rounded-md border-2 border-gray-600 cursor-pointer break-words"
-      :class="{
-        'bg-accent text-primary-950': props.indexSelected === index,
-        'bg-gray-700': props.indexSelected !== index,
-      }"
-      @click="selectKubeconfig(kubeconfig.kubeconfig, index)"
+      v-for="kubeconfig in props.kubeconfigs"
+      :key="kubeconfig.name"
+      class="px-12 py-6 text-lg break-words border-2 border-gray-600 rounded-md cursor-pointer"
+      :class="
+        props.selected && props.selected.name === kubeconfig.name
+          ? 'bg-accent text-primary-950'
+          : 'bg-gray-700'
+      "
+      @click="emit('update:selected', kubeconfig)"
     >
       {{ kubeconfig.name }}
     </button>
